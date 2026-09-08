@@ -17,3 +17,25 @@ több kijelzőt nem tudtam konfigurálni mert nálam nincs egyéb más 480x320-a
 Egyéb haználati infókat a Readme-, és Functionality.md fájlok tartalmaznak!
 
 Kellemes időtöltést kíván a Moon Radio! :)
+
+---
+
+I would like to simplify the environment-dependent configuration of the options.h file by using 
+pre-built configuration files tailored to the displays I have available.
+
+The AXS15231B display has fixed screen pins—that’s a given—but for the other displays as well,
+—depending on the hardware components used—you’ll need to rewrite the pin assignments based on your own wiring.
+
+You’re free to use either the touchscreen or 1/2 encoder settings,
+but depending on the DAC used, you’ll need to comment out or uncomment the use of the MCLK pin.
+I usually use one of pins 15 or 17 for these.
+
+- options.h_AXS15231B for the JC3248W535C module
+- options.h_ILI9488_TS, i.e., (T)ouch (S)creen
+- options.h_ILI9488_noTS, i.e., without a touchscreen
+- options.h_ST7796_noTS, i.e., without a touchscreen
+I wasn’t able to configure more displays because I don’t have any other 480x320 displays
+
+Additional usage information is included in the Readme and Functionality.md files!
+
+Moon Radio wishes you a pleasant listening experience! :)
