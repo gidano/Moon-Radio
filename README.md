@@ -55,7 +55,7 @@ látható rádió-IP-címet (később az LVGL Radio feliratot érintve hívható
 Portot vagy külön útvonalat nem kell megadni.
 
 Ajánlott kiegészítő partíciófájlok Wi-Fi-s kezeléséhez:
-[LittleFS-SPIFFS_File_Manager_WiFi_v0.6.0](https://github.com/gidano/myRadio-SPIFFS-Manager/tree/main/LittleFS-SPIFFS%20Partition%20Manager).
+[LittleFS-SPIFFS_File_Manager_WiFi_v0.6.0](https://github.com/gidano/myRadio-SPIFFS-Manager/tree/main/LittleFS-SPIFFS%20Partition%20Manager)
 
 Wi‑Fi-n elérhető műveletek:
 
@@ -77,10 +77,13 @@ A fájlkezelő API a helyi hálózaton nincs jelszóval védve, ezért csak
 megbízható hálózaton használd.
 
 Ajánlott kiegészítő állomáslista Wi-Fi-s kezeléséhez:
-[myRadio Stations Editor](https://github.com/gidano/myRadio-Stations-Editor).
+[myRadio Stations Editor](https://github.com/gidano/myRadio-Stations-Editor)
 
 PC-n lévő zenei mappák hálózati streameléséhez használható kiegészítő:
-[myRadio Music Server](https://github.com/gidano/myRadio-Music-Server).
+[myRadio Music Server](https://github.com/gidano/myRadio-Music-Server)
+
+Android rendszerű eszközről történő webes irányításhoz, készülékmentéssel:
+[YoRadio Controller](https://github.com/gidano/YoRadio-Controller)
 
 
 ---
@@ -171,3 +174,7 @@ Recommended add-on for managing station lists via Wi-Fi:
 
 Add-on for streaming music folders from a PC over a network:
 [myRadio Music Server](https://github.com/gidano/myRadio-Music-Server).
+
+For web-based control from an Android device, with device backup:
+[YoRadio Controller](https://github.com/gidano/YoRadio-Controller)
+
