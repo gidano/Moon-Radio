@@ -391,7 +391,7 @@ void RadioController::loop() {
     Serial.println("[radio] M3U kapcsolat ujraprobalasa");
     connectCurrentStation();
   }
-  recoverStalledStream(now, wifiConnected, running, bufferFilled);
+  recoverStalledStream(now, wifiConnected, bufferFilled);
   if (volumeSavePending_ && now - volumeChangedAt_ >= 1000) {
     Preferences preferences;
     preferences.begin("lvgl-radio", false);
@@ -495,8 +495,14 @@ bool RadioController::togglePause() {
   return audio_.togglePause();
 }
 
+void RadioController::resetStreamProgressWatchdog(uint32_t now) {
+  lastAudioDataAt_ = now;
+  lastObservedAudioTime_ = 0;
+  lastObservedBufferFilled_ = 0;
+  decoderProgressObserved_ = false;
+}
+
 void RadioController::recoverStalledStream(uint32_t now, bool wifiConnected,
-                                           bool running,
                                            size_t bufferFilled) {
   if (!wifiConnected || audio_.paused() || clockTtsActive_ ||
       clockTtsFadingDown_ || clockTtsFadingUp_ || connectRetryPending_ ||
@@ -504,15 +510,27 @@ void RadioController::recoverStalledStream(uint32_t now, bool wifiConnected,
     return;
   }
 
-  if (bufferFilled > 0) {
+  // A non-empty buffer alone is not a proof of playback: a broken HTTP/TLS
+  // connection can leave bytes behind while the decoder has stopped.  Once a
+  // stream has reported decoded play time, use that as the liveness signal.
+  // Some codecs do not publish a play clock immediately, so before then a
+  // changing buffer remains a conservative fallback for slow stations.
+  const uint32_t audioTime = audio_.audioCurrentTime();
+  if (audioTime > 0 && audioTime != lastObservedAudioTime_) {
+    decoderProgressObserved_ = true;
     lastAudioDataAt_ = now;
-    return;
+  } else if (!decoderProgressObserved_ &&
+             bufferFilled != lastObservedBufferFilled_) {
+    lastAudioDataAt_ = now;
   }
+  lastObservedAudioTime_ = audioTime;
+  lastObservedBufferFilled_ = bufferFilled;
 
-  if (!lastAudioDataAt_) lastAudioDataAt_ = now;
+  if (!lastAudioDataAt_) resetStreamProgressWatchdog(now);
 
-  const uint32_t stallLimit =
-      running ? kStreamStallRecoverMs : kStreamInitialGraceMs;
+  const uint32_t stallLimit = decoderProgressObserved_
+                                  ? kStreamStallRecoverMs
+                                  : kStreamInitialGraceMs;
   if (now - lastAudioDataAt_ < stallLimit) return;
   if (lastStreamRecoveryAt_ &&
       now - lastStreamRecoveryAt_ < kStreamRecoveryCooldownMs) {
@@ -520,8 +538,8 @@ void RadioController::recoverStalledStream(uint32_t now, bool wifiConnected,
   }
 
   lastStreamRecoveryAt_ = now;
-  lastAudioDataAt_ = now;
-  Serial.printf("[radio] Stream nem ad adatot %lu ms ota, ujrainditas: %s\n",
+  resetStreamProgressWatchdog(now);
+  Serial.printf("[radio] Stream lejatszasa nem halad %lu ms ota, ujrainditas: %s\n",
                 static_cast<unsigned long>(stallLimit),
                 currentPlayUrl_.c_str());
   audio_.stop();
@@ -562,6 +580,11 @@ bool RadioController::setTimezone(String value) {
         strchr("<>,.+-/:_", character);
     if (!valid) return false;
   }
+
+  // The settings page posts every field together. Re-running configTzTime()
+  // for an unchanged value repeatedly recreates the SNTP/timer state and can
+  // destabilize the FreeRTOS timer task under Wi-Fi load.
+  if (timezone_ == value) return true;
 
   timezone_ = value;
   Preferences preferences;
@@ -1211,7 +1234,7 @@ bool RadioController::connectCurrentStation() {
                   currentPlayUrl_.c_str());
   }
   playlistTitle_ = title;
-  lastAudioDataAt_ = millis();
+  resetStreamProgressWatchdog(millis());
   logoManager_.selectStation(station->logoName, currentPlayUrl_,
                              station->homepage, station->name);
   const bool queued = audio_.connect(currentPlayUrl_);
@@ -1230,7 +1253,7 @@ bool RadioController::stepTrack(int delta) {
                   currentPlayUrl_.c_str());
   }
   playlistTitle_ = title;
-  lastAudioDataAt_ = millis();
+  resetStreamProgressWatchdog(millis());
   const Station* station = currentStation();
   metadata_.selectStation(station);
   logoManager_.selectStation(station ? station->logoName : String("nologo"),

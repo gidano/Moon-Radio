@@ -127,7 +127,8 @@ class RadioController {
   bool connectCurrentStation();
   bool stepTrack(int delta);
   void cycleWeatherMode();
-  void recoverStalledStream(uint32_t now, bool wifiConnected, bool running,
+  void resetStreamProgressWatchdog(uint32_t now);
+  void recoverStalledStream(uint32_t now, bool wifiConnected,
                             size_t bufferFilled);
   void processClockTts(uint32_t now);
   void resetClockTtsPlayback(bool restoreVolume);
@@ -187,6 +188,9 @@ class RadioController {
   uint32_t lastWebLoopAt_{0};
   uint32_t lastAudioDataAt_{0};
   uint32_t lastStreamRecoveryAt_{0};
+  uint32_t lastObservedAudioTime_{0};
+  size_t lastObservedBufferFilled_{0};
+  bool decoderProgressObserved_{false};
   int clockTtsPreviousVolume_{0};
   int clockTtsFadeVolume_{-1};
   int clockTtsLastMinute_{-1};
