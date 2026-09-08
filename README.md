@@ -1,3 +1,10 @@
+# Screenshot / Képernyőképek
+
+<p align="center">
+  <img src="https://github.com/gidano/LVGL-Radio/blob/main/Photos/LVGL-Radio.jpg" width="480">
+  <img src="https://github.com/gidano/LVGL-Radio/blob/main/Photos/LVGL-Radio_2.jpg" width="480">
+</p>
+
 # Moon Radio
 
 A Moon Radio ESP32-S3 alapú internetes rádió, érintőkijelzős és böngészőből
