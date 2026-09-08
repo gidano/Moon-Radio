@@ -1,1 +1,87 @@
-
+181.FM - CLASSIC. GUITAR	http://listen.181fm.com/181-classicalguitar_128k.mp3	https://player.181fm.com/configs/images/181fm.png
+181.FM - REAL COUNTRY	https://listen.181fm.com/181-realcountry_128k.mp3	https://player.181fm.com/configs/images/181fm.png
+181.FM - REGGAE ROOTS	http://listen.181fm.com/181-reggae_128k.mp3	https://player.181fm.com/configs/images/181fm.png
+181.FM - UK TOP 40	http://listen.181fm.com/181-uktop40_128k.mp3	https://player.181fm.com/configs/images/181fm.png
+181.FM CLASSIC HITS	https://listen.181fm.com/181-greatoldies_128k.mp3	https://player.181fm.com/configs/images/181fm.png
+181.FM GOOD TIME OLDIES	https://listen.181fm.com/181-goodtime_128k.mp3	https://player.181fm.com/configs/images/181fm.png
+181.FM HIGHWAY	https://listen.181fm.com/181-highway_128k.mp3	https://player.181fm.com/configs/images/181fm.png
+AIDA RADIO	https://cdn05.radio.cloud:8128/AIDA-OMNIA-GAI	aidaradio
+AFC RADIO	https://stream.afc.fm/index.html	https://www.afc.fm/wp-content/uploads/2023/12/afcfm.png
+BDPST ROCK	https://bdpstrock.hu/live.mp3	https://bdpstrock.hu/APPLIKACIO/BRL_500X500.png
+BDPST ROCK (HI-FI)	http://s2.audiostream.hu:8091/bdpstrock_FLAC	https://bdpstrock.hu/APPLIKACIO/BRL_500X500.png
+BEST OF ROCK.FM ACDC	https://bestofrockfm.stream.vip/acdc/mp3-256/bestofrock.fm/	https://www.best-of-rock.fm/assets/images/BOR/acdc.jpg
+BIAS RÁDIÓ	https://admin.biasradio.com/radio/8000/live	bias_radio
+BITHANG YOO RÁDIÓ	https://s03.diazol.hu:35162/stream	https://myonlineradio.hu/public/uploads/radio_img/bithang-yoo-radio/play_250_250.webp
+BLUES WAVE	https://blueswave.radio:8000/blueswave	blueswave
+CLASSIC FM UK	http://ice-the.musicradio.com/ClassicFMMP3	http://www.classicfm.com/assets_v4r/classic/img/favicon-196x196.png
+CLASSIC VINYL HD	https://icecast.walmradio.com:8443/classic	https://icecast.walmradio.com:8443/classic.jpg
+COOL FM	https://mediagw.e-tiger.net:443/stream/cfmhq	coolfm
+COOLFM FUNKY&SOUL	https://mediagw.e-tiger.net/stream/zc25	coolfm
+CREEDENCE C. R.	https://nl4.mystreaming.net/er/creedence/icecast.audio	https://static2.mytuner.mobi/media/tvos_radios/jueykda5xdel.png
+CSUKÁS MESERÁDIÓ	https://mr-stream.connectmedia.hu/4611/mr10.mp3	csukasmeseradio
+DANCEFM 89.5	http://edge126.rdsnet.ro:84/profm/dancefm.mp3	dancefm
+DANUBIUS RÁDIÓ	https://stream.danubiusradio.hu/danubius_192k	danubius
+DANUBIUS RÁDIÓ (HI-FI)	https://danubiusradio.hu/live_HiFi.mp3	danubius
+DEEP PURPLE	https://streaming.exclusive.radio/er/deeppurple/icecast.audio	https://static2.mytuner.mobi/media/tvos_radios/jueykda5xdel.png
+DEJA VU	https://carina.streamerr.co/stream/dejavuradio/dejavuradio	dejavu
+DEPECHE MODE	http://nl4.mystreaming.net/er/depechemode/icecast.audio	https://static2.mytuner.mobi/media/tvos_radios/jueykda5xdel.png
+DJ NOW!	https://s01.diazol.hu:10072/djnow	radio_now
+ERIC CLAPTON	https://streaming.exclusive.radio/er/ericclapton/icecast.audio	https://static2.mytuner.mobi/media/tvos_radios/jueykda5xdel.png
+ESKA ROCK	http://n17a-eu.rcs.revma.com/1nnezw8qz7zuv	eskarock
+FLEETWOOD MAC	https://streaming.exclusive.radio/er/fleetwoodmac/icecast.audio	https://static2.mytuner.mobi/media/tvos_radios/jueykda5xdel.png
+FUNKY CORNER	http://ais-edge147-dal03.cdnstream.com:80/2447_192.mp3	funky_corner
+GARY MOORE	https://streaming.exclusive.radio/er/garymoore/icecast.audio	https://static2.mytuner.mobi/media/tvos_radios/jueykda5xdel.png
+GUNS 'N ROSES	http://stream.regenbogen2.de/gunsnroses/mp3-128/radiobrowser	rock_fm_de
+I LOVE PÉCS	https://stream.ilovepecsradio.hu/ilp.mp3	https://player.ilovepecsradio.hu/logoilpr.png
+IRISH FOLK	https://stream.laut.fm/irish-folk	laut_fm
+IRISH PUB	https://solid24.streamupsolutions.com/proxy/vbkiacud?mp=/live	irishpubradio
+KLUBRÁDIÓ	https://stream.klubradio.hu:8443/bpstream	klubradio
+KOSSUTH RÁDIÓ	http://icast.connectmedia.hu/4726/mr1ex.mp3	kossuth
+LA GROSSE RADIO REGGAE	http://hd.lagrosseradio.info/lagrosseradio-reggae-192.mp3	lagrosse
+LAPFOX (128 VOR)	https://radio.lapfoxradio.com/radio/8000/stream-ogg-128.ogg	lapfox
+LAZA RÁDIÓ	http://stream.lazaradio.com/	lazaradio
+LUXFUNK	https://luxfunkbroadcast.com:443/proxy/luxfunkradio/stream	luxfunk
+MANGORADIO - LAUT.FM	https://mangoradio.stream.laut.fm/mangoradio	mangoradio
+MEGADANCE	http://gamershouse.hu:8000/livemega.mp3	megadance
+NEXT FM	http://stream.nextfm.hu/radio/8000/nextfmhu.mp3	nextfm
+OXYGEN MAGYAR ZENE	https://oxygenmusic.hu:8443/oxygenmagyarzene	oxygen_music
+OXYGEN MUSIC	https://oxygenmusic.hu:8443/oxygenmusic_192	oxygen_music
+PARKFM	http://s03.diazol.hu:7142/stream.mp3	parkfm
+PC/ZENE - KEVERT	http://192.168.31.101:8000/playlist_shuffle.m3u	music_server
+PETŐFI RÁDIÓ	http://icast.connectmedia.hu/4738/mr2.mp3	petofi
+PINK FLOYD	https://streaming.exclusive.radio/er/pinkfloyd/icecast.audio	https://static2.mytuner.mobi/media/tvos_radios/jueykda5xdel.png
+POPTARISZNYA	http://adas.poptarisznya.hu:8200/live.mp3/	poptarisznya
+POPTARISZNYA OLDIES	http://adas.poptarisznya.hu:8200/oldies.mp3	poptarisznya
+QUEEN	https://nl4.mystreaming.net/er/queen/icecast.audio	https://static2.mytuner.mobi/media/tvos_radios/jueykda5xdel.png
+RADIO BLUES	http://streams.radiomast.io/radioblues-flac	radioblues_flac
+RADIO CAP. FUNKY TOWN	https://4c4b867c89244861ac216426883d1ad0.msvdn.net/radiocapitalfunkytown/radiocapitalfunkytown/master_ma.m3u8	/logos/rb-571ecf3e-f348-4bdb-b30d-31e2a20e8fe9.png
+RADIO COMEDY	https://a7.asurahosting.com:8430/radio.mp3	radio_comedy
+RADIO ITALO4YOU	https://ssl-1.radiohost.pl:8018/stream	radio_italo4you
+RADIO PARADISE MAIN MIX	http://stream-uk1.radioparadise.com/aac-320	https://radioparadise.com/apple-touch-icon.png
+RADIOPARADISE (FLAC)	http://stream.radioparadise.com/rock-flacm	radioparadise
+RADIOPARADISE (VOR)	http://stream-dc1.radioparadise.com/rp_192m.ogg	radioparadise
+RAMONES	https://nl4.mystreaming.net/er/ramones/icecast.audio	https://static2.mytuner.mobi/media/tvos_radios/jueykda5xdel.png
+REGGAE CHILL CAFE	https://maggie.torontocast.com:2020/stream/reggaechillcafe	reggaechillcafe
+REGGAE141.COM	http://das-edge27-sa23-lax02.cdnstream.com:80/1301_128	reggae141
+RETRO RÁDIÓ	http://icast.connectmedia.hu/5002/live.mp3	https://www.retroradio.hu/wp-content/themes/retroradio/assets/dist/logo-150x150.png
+RMF FM	http://195.150.20.242:8000/rmf_fm	https://www.rmf.fm/assets/images/favicon/apple-icon-120x120.png
+ROCK FM	https://icast.connectmedia.hu/5301/live.mp3	rock_fm
+ROLLING STONES	http://stream.regenbogen2.de/rollingstones/mp3-128	rock_fm_de
+ROXY RÁDIÓ	https://s2.audiostream.hu/roxy_192k	roxy_radio
+RÁDIÓ 1	http://icast.connectmedia.hu/5201/live.mp3	radio1
+RÁDIÓ F.R.S.H. SIÓFOK	http://radiofrsh.com:8000/stream	https://radiofrsh.eu/vinyl.webp
+SLÁGER FM	http://92.61.114.159:7812/slagerfm256.mp3	slager_fm
+SOMA FM REGGAE	https://ice2.somafm.com/reggae-128-mp3	soma_fm
+SUPERDJ	https://stream.diazol.hu:35150/stream	superdj
+TAYLOR SWIFT	https://nl4.mystreaming.net/er/taylorswift/icecast.audio	https://static2.mytuner.mobi/media/tvos_radios/jueykda5xdel.png
+TECHNOLOVERS.FM - TECHNO	https://stream.technolovers.fm/techno	https://www.radio.pl/300/technoloverstechno.jpeg
+TESZT LAZA RADIO (VOR)	http://stream.lazaradio.com:8100/live.ogg	lazaradio
+TESZT LIBLWIP CSERE	https://s2.euer.tv/audio320	nologo
+TESZT TILOS (OPUS)	https://stream.tilos.hu/tilos.opus	tilos_radio
+TILOS	http://stream.tilos.hu/tilos_128.mp3	tilos_radio
+WDWH-ROOTS OF ROCK	http://s4.voscast.com:8950/stream	https://www.voscast.com/images/white_logo.png
+YOUVENTUS RÁDIÓ	http://s2.audiostream.hu/juventus_192k	youventus
+YOUVENTUS RÁDIÓ (HI-FI)	http://s2.audiostream.hu:8090/juventus_FLAC	youventus
+ZEBRÁDIÓ	https://stream.zebradio.hu:8443/zebradio	zebradio
+ZENO FM DIRE STRAITS	http://stream.zeno.fm/bvgq21uu1zhvv	zeno_fm
+ZZ TOP	https://2.mystreaming.net/er-app/zztop/icecast.audio	https://static2.mytuner.mobi/media/tvos_radios/jueykda5xdel.png
