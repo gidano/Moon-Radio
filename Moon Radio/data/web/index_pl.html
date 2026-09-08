@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel myRadio</title>
+    <link rel="icon" href="/web/favicon.svg" type="image/svg+xml">
+    <link rel="manifest" href="/web/site.webmanifest">
+    <meta name="theme-color" content="#0b1020">
+    <style>
+        body { 
+            font-family: sans-serif; 
+            background: #121212; 
+            color: #e0e0e0; 
+            margin: 0; 
+            padding: 20px; 
+            text-align: center; 
+        }
+        h1 { 
+            color: #00e5ff; 
+            font-weight: 300; 
+            margin-bottom: 10px;
+        }
+        .container { 
+            max-width: 600px; 
+            margin: auto; 
+        }
+        .status-bar {
+            background: #1e1e1e;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid #333;
+        }
+        .now-playing {
+            font-size: 18px;
+            color: #00e5ff;
+        }
+        .now-playing-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            min-height: 72px;
+            margin-bottom: 12px;
+        }
+        .station-logo-frame {
+            width: 72px;
+            height: 72px;
+            flex: 0 0 72px;
+            position: relative;
+            display: grid;
+            place-items: center;
+            overflow: hidden;
+            border: 1px solid #3a4b50;
+            border-radius: 12px;
+            background: #11181a;
+            color: #607d84;
+            font-size: 30px;
+        }
+        .station-logo {
+            width: 100%;
+            height: 100%;
+            display: none;
+            object-fit: contain;
+        }
+        .now-playing-copy {
+            min-width: 0;
+            flex: 1;
+            text-align: left;
+        }
+        .artist-title {
+            font-size: 16px;
+            color: #fff;
+            margin-top: 8px;
+        }
+        .codec-info {
+            margin-bottom: 15px;
+        }
+        .codec-badge {
+            background: #333;
+            color: #00e5ff;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin: 0 3px;
+        }
+        .buffer-container {
+            margin: 15px 0;
+            text-align: left;
+        }
+        .buffer-label {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 5px;
+        }
+        .buffer-bar {
+            width: 100%;
+            height: 12px;
+            background: #333;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 5px;
+        }
+        .buffer-fill {
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .buffer-fill.green { background: #00ff00; }
+        .buffer-fill.yellow { background: #ffff00; }
+        .buffer-fill.red { background: #ff0000; }
+        .buffer-text {
+            font-size: 11px;
+            color: #888;
+            text-align: right;
+        }
+        .volume-control {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .volume-btn {
+            background: #333;
+            border: none;
+            color: white;
+            font-size: 24px;
+            width: 40px;
+            height: 40px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .volume-btn:hover {
+            background: #00e5ff;
+            color: #000;
+        }
+        .volume-value {
+            font-size: 20px;
+            font-weight: bold;
+            min-width: 60px;
+        }
+        .control-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .transport-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 18px;
+            flex-wrap: wrap;
+            margin: 18px 0 12px;
+        }
+        .transport-row .control-buttons {
+            margin: 0;
+        }
+        .pc-stream-control {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            padding-left: 14px;
+            border-left: 1px solid #333;
+        }
+        .pc-stream-label {
+            color: #94a3b8;
+            font-size: 12px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        .pc-stream-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .pc-stream-buttons .control-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 25px;
+            font-size: 17px;
+        }
+        @media (max-width: 520px) {
+            .pc-stream-control {
+                padding-left: 0;
+                border-left: none;
+            }
+        }
+        .control-btn {
+            background: #333;
+            border: none;
+            color: white;
+            font-size: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .control-btn:hover {
+            background: #00e5ff;
+            color: #000;
+        }
+        .control-btn.pause {
+            background: #ff5722;
+        }
+        .control-btn.reset {
+            background: #dc3545;
+            font-size: 16px;
+            width: auto;
+            padding: 0 20px;
+            margin-top: 10px;
+        }
+        .control-btn.reset:hover {
+            background: #ff0000;
+        }
+        .station-list { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 8px; 
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 5px;
+        }
+        .station-btn { 
+            background: #1e1e1e; 
+            border: 1px solid #333; 
+            color: white; 
+            padding: 12px 15px; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-size: 15px; 
+            transition: 0.3s;
+            text-align: left; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+        }
+        .station-btn:hover { 
+            background: #333; 
+            border-color: #00e5ff; 
+        }
+        .station-btn.active { 
+            border-color: #00e5ff; 
+            background: #1a2628; 
+            color: #00e5ff; 
+            font-weight: bold; 
+        }
+        .status { 
+            font-size: 14px; 
+            color: #888; 
+            margin: 10px 0; 
+        }
+        .search-box {
+            width: 100%;
+            padding: 12px;
+            background: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: white;
+            font-size: 16px;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+        }
+        .search-box:focus {
+            outline: none;
+            border-color: #00e5ff;
+        }
+        .footer {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+        }
+    
+        .delete-btn{
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #fff;
+            border-radius: 10px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .delete-btn:hover{ filter: brightness(1.1); }
+
+
+        .icon-btn{
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #fff;
+            border-radius: 10px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+        }
+        .icon-btn:hover{ filter: brightness(1.1); }
+        .drag-handle{ cursor: grab; }
+        .dragging{ opacity: .6; }
+
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📻 Moon Radio</h1>
+    <p style="margin-top:-8px">
+      <a href="/upload" style="color:#7fd; text-decoration:underline; white-space:nowrap;">Przesyłanie plików (SPIFFS)</a>
+      <span style="opacity:.6"> | </span>
+      <a href="/web/search_pl.html" style="color:#7fd; text-decoration:underline; white-space:nowrap;">🔎 Wyszukiwanie stacji</a>
+      <span style="opacity:.6"> | </span>
+      <a href="/web/settings_pl.html" style="color:#7fd; text-decoration:underline; white-space:nowrap;">⚙️ Ustawienia</a>
+    </p>
+        
+        <div class="status-bar">
+            <div class="now-playing-row">
+                <div class="station-logo-frame">
+                    <span id="stationLogoFallback">📻</span>
+                    <img id="stationLogo" class="station-logo" alt="">
+                </div>
+                <div class="now-playing-copy">
+                    <div id="nowPlaying" class="now-playing">Wczytywanie...</div>
+                    <div id="artistTitle" class="artist-title"></div>
+                </div>
+            </div>
+            <div id="codecInfo" class="codec-info"></div>
+            
+            <!-- Buffer kijelző -->
+            <div id="bufferContainer" class="buffer-container" style="display: none;">
+                <div class="buffer-label">Stan bufora</div>
+                <div class="buffer-bar">
+                    <div id="bufferFill" class="buffer-fill" style="width: 0%;"></div>
+                </div>
+                <div id="bufferText" class="buffer-text">0%</div>
+            </div>
+            
+            <div class="volume-control">
+                <button class="volume-btn" onclick="volumeDown()">-</button>
+                <span id="volumeValue" class="volume-value">5</span>
+                <button class="volume-btn" onclick="volumeUp()">+</button>
+            </div>
+
+<div class="brightness-control" style="display:flex; align-items:center; justify-content:center; gap:10px; margin:10px 0 0;">
+    <span style="min-width:80px; text-align:right; color:#bbb;">Jasność</span>
+    <input id="brightnessSlider" type="range" min="0" max="255" value="255" style="width:220px;">
+    <span id="brightnessValue" style="min-width:36px; text-align:left; color:#bbb;">255</span>
+</div>
+
+            
+            <div class="transport-row">
+                <div class="control-buttons">
+                    <button class="control-btn" onclick="prevStation()">⏮</button>
+                    <button id="playPauseBtn" class="control-btn" onclick="togglePlayPause()">⏸</button>
+                    <button class="control-btn" onclick="nextStation()">⏭</button>
+                </div>
+                <div class="pc-stream-control">
+                    <div class="pc-stream-label">PC stream</div>
+                    <div class="pc-stream-buttons">
+                        <button class="control-btn" title="Poprzedni utwór" onclick="prevTrack()">⏮🎵</button>
+                        <button class="control-btn" title="Następny utwór" onclick="nextTrack()">⏭🎵</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="display:flex; gap:8px; margin: 12px 0; flex-wrap: wrap; justify-content:center;">
+            <input id="newName" class="search-box" style="margin:0; flex: 1; min-width: 220px;" placeholder="Nowa nazwa stacji">
+            <input id="newUrl"  class="search-box" style="margin:0; flex: 2; min-width: 260px;" placeholder="Adres URL strumienia">
+            <input id="newHomepage" class="search-box" style="margin:0; flex: 2; min-width: 260px;" placeholder="Strona stacji (opcjonalnie)">
+            <button class="control-btn" style="width:auto; padding:0 14px; height:48px; border-radius:12px;" onclick="addStation()">+</button>
+        </div>
+
+<input type="text" id="search" class="search-box" placeholder="🔍 Szukaj stacji..." onkeyup="filterStations()">
+        
+        <div id="status" class="status">Łączenie...</div>
+        <div id="list" class="station-list"></div>
+		<!-- verzió szám az állomás lista alatt -->
+        <div style="
+            margin: 5px 12px 0 0;
+            text-align: right;
+            color: #666;
+            font-size: 11px;
+            opacity: 0.65;
+            line-height: 1.2;
+        ">
+            Moon Radio · v0.2.6
+        </div>
+        
+        <!-- Reset gomb a láblécben -->
+        <div class="footer" style="margin-top: -10px;">
+            <button class="control-btn reset" onclick="resetESP32()">🔄 Uruchom ponownie ESP32</button>
+        </div>
+    </div>
+
+    <script>
+        let stations = [];
+        let currentIndex = 0;
+        let volume = 5;
+        let paused = false;
+        let bufferPercent = 0;
+        let updateInterval;
+
+        // API hívások
+        async function fetchStations() {
+            try {
+                const response = await fetch('/api/stations');
+                const data = await response.json();
+                stations = data.stations;
+                currentIndex = data.currentIndex;
+                volume = data.volume;
+                paused = data.paused;
+                document.getElementById('volumeValue').innerText = volume;
+                document.getElementById('playPauseBtn').innerHTML = paused ? '▶' : '⏸';
+                renderStationList();
+                updateNowPlaying(data);
+                document.getElementById('status').innerText = `${stations.length} stacji wczytano.`;
+            } catch (e) {
+                console.error('Error while loading stations:', e);
+                document.getElementById('status').innerText = "Nie udało się wczytać listy!";
+            }
+        }
+
+        async function addStation() {
+            const name = document.getElementById('newName').value.trim();
+            const url  = document.getElementById('newUrl').value.trim();
+            const homepage = document.getElementById('newHomepage').value.trim();
+            if (!name || !url) {
+                alert('Wpisz nazwę i adres URL!');
+                return;
+            }
+            const body = new URLSearchParams({ name, url, homepage });
+            const res = await fetch('/api/stations/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body
+            });
+            if (!res.ok) {
+                alert('Nie udało się dodać / zapisać.');
+                return;
+            }
+            document.getElementById('newName').value = '';
+            document.getElementById('newUrl').value  = '';
+            document.getElementById('newHomepage').value = '';
+            await fetchStations();
+        }
+
+        async function deleteStation(index) {
+            if (!confirm('Usunąć tę stację?')) return;
+
+            const body = new URLSearchParams({ index: String(index) });
+            const res = await fetch('/api/stations/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body
+            });
+            if (!res.ok) {
+                alert('Usuwanie nie powiodło się.');
+                return;
+            }
+            await fetchStations();
+        }
+
+
+        async function reorderStations(from, to) {
+            try {
+                // Backend in your firmware accepts multiple endpoint names;
+                // we use a common one and send JSON indices.
+                const res = await fetch('/api/stations/reorder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ oldIndex: from, newIndex: to })
+                });
+
+                if (res.ok) return true;
+
+                // Fallbacks (form-encoded) for older handlers
+                const body = new URLSearchParams({ from: String(from), to: String(to) });
+                const res2 = await fetch('/api/stations/move', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body
+                });
+                return res2.ok;
+            } catch (e) {
+                console.error('reorderStations error:', e);
+                return false;
+            }
+        }
+
+
+        const runtimeLogoCache = new Map();
+        let displayedLogoKey = '';
+        function updateCurrentLogo(data) {
+            const key = String(data.logoPath || '') + '|' +
+                        String(data.logoSource || '');
+            if (key === displayedLogoKey) return;
+            displayedLogoKey = key;
+            const image = document.getElementById('stationLogo');
+            const fallback = document.getElementById('stationLogoFallback');
+            image.onload = () => {
+                image.style.display = 'block';
+                fallback.style.display = 'none';
+            };
+            image.onerror = () => {
+                image.style.display = 'none';
+                fallback.style.display = 'inline';
+            };
+            image.src = '/api/logo/current.bmp?v=' + encodeURIComponent(key);
+        }
+        async function cacheLogoViaBrowser(state) {
+            const source = String(state.logoSource || '');
+            const path = String(state.logoPath || '');
+            const needsBrowserImport = Boolean(state.logoNeedsBrowserImport);
+            if (!/^https?:\/\//i.test(source) ||
+                (!needsBrowserImport && path && !path.includes('nologo'))) return;
+            const previous = runtimeLogoCache.get(source);
+            if (previous && Date.now() - previous < 60000) return;
+            try {
+                runtimeLogoCache.set(source, Date.now());
+                const image = await new Promise((resolve, reject) => {
+                    const node = new Image();
+                    const imageUrl = needsBrowserImport
+                        ? '/api/artwork/proxy?url=' + encodeURIComponent(source)
+                        : source;
+                    if (!needsBrowserImport) node.crossOrigin = 'anonymous';
+                    node.onload = () => resolve(node);
+                    node.onerror = reject;
+                    node.src = imageUrl;
+                });
+                const canvas = document.createElement('canvas');
+                canvas.width = 150; canvas.height = 150;
+                const context = canvas.getContext('2d');
+                context.imageSmoothingEnabled = true;
+                context.imageSmoothingQuality = 'high';
+                const scale = Math.min(150 / image.naturalWidth, 150 / image.naturalHeight);
+                const width = Math.max(1, Math.round(image.naturalWidth * scale));
+                const height = Math.max(1, Math.round(image.naturalHeight * scale));
+                context.clearRect(0, 0, 150, 150);
+                context.drawImage(image, (150-width)/2, (150-height)/2, width, height);
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+                if (!blob) return;
+                const form = new FormData();
+                form.append('file', blob, 'artwork.png');
+                await fetch('/api/artwork/cache?url=' + encodeURIComponent(source),
+                            { method: 'POST', body: form });
+            } catch (error) {
+                runtimeLogoCache.delete(source);
+                console.debug('Browser artwork fallback:', error);
+            }
+        }
+
+        async function fetchStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                currentIndex = data.currentIndex;
+                volume = data.volume;
+                paused = data.paused;
+                document.getElementById('volumeValue').innerText = volume;
+                document.getElementById('playPauseBtn').innerHTML = paused ? '▶' : '⏸';
+                updateNowPlaying(data);
+                highlightCurrentStation();
+                cacheLogoViaBrowser(data);
+            } catch (e) {
+                console.error('Error while loading status:', e);
+            }
+        }
+
+        // Buffer állapot lekérése (külön endpoint)
+        async function fetchBufferStatus() {
+            try {
+                const response = await fetch('/api/buffer');
+                if (!response.ok) {
+                    // Ha nincs buffer endpoint, elrejtjük a buffer kijelzőt
+                    document.getElementById('bufferContainer').style.display = 'none';
+                    return;
+                }
+                const data = await response.json();
+                bufferPercent = data.percent;
+                updateBufferDisplay(data);
+            } catch (e) {
+                // Ha nincs buffer endpoint, elrejtjük a buffer kijelzőt
+                document.getElementById('bufferContainer').style.display = 'none';
+            }
+        }
+
+        function updateBufferDisplay(data) {
+            const container = document.getElementById('bufferContainer');
+            const fill = document.getElementById('bufferFill');
+            const text = document.getElementById('bufferText');
+            
+            // Megjelenítjük a konténert
+            container.style.display = 'block';
+            
+            // Buffer százalék
+            const percent = data.percent || 0;
+            fill.style.width = percent + '%';
+            
+            // Szín beállítása
+            fill.className = 'buffer-fill';
+            if (percent > 75) {
+                fill.classList.add('green');
+            } else if (percent > 40) {
+                fill.classList.add('yellow');
+            } else {
+                fill.classList.add('red');
+            }
+            
+            // Szöveg formázása
+            let textStr = percent + '%';
+            if (data.filled && data.total) {
+                const mbFilled = (data.filled / (1024 * 1024)).toFixed(1);
+                const mbTotal = (data.total / (1024 * 1024)).toFixed(1);
+                textStr += ` (${mbFilled}MB / ${mbTotal}MB)`;
+            }
+            text.innerText = textStr;
+        }
+
+        function updateNowPlaying(data) {
+            updateCurrentLogo(data);
+            let nowPlayingText = data.stationName || 'Nieznana stacja';
+            let artistTitleText = '';
+            
+            if (data.artist && data.artist.length > 0) {
+                artistTitleText = `${data.artist} - ${data.title}`;
+            } else if (data.title && data.title.length > 0) {
+                artistTitleText = data.title;
+            }
+            
+            document.getElementById('nowPlaying').textContent = nowPlayingText;
+            document.getElementById('artistTitle').textContent =
+                artistTitleText || '\u00a0';
+            
+            let codecInfo = '';
+            if (data.codec && data.codec.length > 0) {
+                codecInfo = `<span class="codec-badge">${data.codec}</span>`;
+            }
+            if (data.bitrate > 0) {
+                let bitrateText = data.bitrate < 1000 ? data.bitrate + 'k' : (data.bitrate/1000).toFixed(1) + 'M';
+                codecInfo += `<span class="codec-badge">${bitrateText}</span>`;
+            }
+            document.getElementById('codecInfo').innerHTML = codecInfo;
+        }
+
+        function highlightCurrentStation() {
+            document.querySelectorAll('.station-btn').forEach(btn => {
+                if (btn.dataset.index == currentIndex) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+        }
+
+        function renderStationList() {
+            const listDiv = document.getElementById('list');
+            listDiv.innerHTML = '';
+
+            stations.forEach((station, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'station-btn';
+                btn.dataset.index = index;
+                btn.draggable = false; // drag&drop via handle only
+                btn.innerHTML = `<span>${station.name}</span>
+                    <span style="display:flex; gap:10px; align-items:center;">
+                        <button class="icon-btn drag-handle" title="Zmień kolejność" aria-label="Zmień kolejność">☰</button>
+                        <button class="icon-btn edit-btn" title="Edytuj" aria-label="Edytuj">✏️</button>
+                        <button class="delete-btn" title="Usuń" aria-label="Usuń">🗑</button>
+                    </span>`;
+
+                // Click on row selects station
+                btn.onclick = () => changeStation(index);
+
+                // Delete
+                const delBtn = btn.querySelector('.delete-btn');
+                delBtn.onclick = (e) => { e.stopPropagation(); deleteStation(index); };
+
+                // Edit (rename + optional URL)
+                const editBtn = btn.querySelector('.edit-btn');
+                
+editBtn.onclick = (e) => {
+  e.stopPropagation();
+
+  const span = btn.querySelector('span');     // a név span-je
+  const oldName = station.name || "";
+  const oldUrl  = station.url  || "";
+  const oldHomepage = station.homepage || "";
+
+  // Név input
+  const nameInput = document.createElement('input');
+  nameInput.value = oldName;
+  nameInput.placeholder = "Nazwa stacji";
+  nameInput.style.flex = "1";
+  nameInput.style.padding = "4px";
+
+  // URL input
+  const urlInput = document.createElement('input');
+  urlInput.value = oldUrl;
+  urlInput.placeholder = "Adres URL strumienia";
+  urlInput.style.flex = "1";
+  urlInput.style.padding = "4px";
+
+  const homepageInput = document.createElement('input');
+  homepageInput.value = oldHomepage;
+  homepageInput.placeholder = "Strona stacji (opcjonalnie)";
+  homepageInput.style.flex = "1";
+  homepageInput.style.padding = "4px";
+
+  // Gombok
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = "✔";
+  saveBtn.className = "icon-btn";
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = "✖";
+  cancelBtn.className = "icon-btn";
+
+  // Layout: két sor + gombok
+  const container = document.createElement('span');
+  container.style.display = "flex";
+  container.style.flexDirection = "column";
+  container.style.gap = "6px";
+  container.style.width = "100%";
+
+  const row1 = document.createElement('span');
+  row1.style.display = "flex";
+  row1.style.gap = "6px";
+  row1.appendChild(nameInput);
+
+  const row2 = document.createElement('span');
+  row2.style.display = "flex";
+  row2.style.gap = "6px";
+  row2.appendChild(urlInput);
+
+  const homepageRow = document.createElement('span');
+  homepageRow.style.display = "flex";
+  homepageRow.style.gap = "6px";
+  homepageRow.appendChild(homepageInput);
+
+  const row3 = document.createElement('span');
+  row3.style.display = "flex";
+  row3.style.gap = "6px";
+  row3.appendChild(saveBtn);
+  row3.appendChild(cancelBtn);
+
+  container.appendChild(row1);
+  container.appendChild(row2);
+  container.appendChild(homepageRow);
+  container.appendChild(row3);
+
+  // A név span helyére betesszük az editort
+  btn.replaceChild(container, span);
+
+  // Cancel → visszarender
+  cancelBtn.onclick = () => renderStationList();
+
+  // Enter ment, Esc mégse (kényelmi)
+  const onKey = (ev) => {
+    if (ev.key === "Escape") cancelBtn.click();
+    if (ev.key === "Enter") saveBtn.click();
+  };
+  nameInput.addEventListener("keydown", onKey);
+  urlInput.addEventListener("keydown", onKey);
+  homepageInput.addEventListener("keydown", onKey);
+
+  // Save
+  saveBtn.onclick = async () => {
+    const newName = nameInput.value.trim();
+    const newUrl  = urlInput.value.trim();
+    const newHomepage = homepageInput.value.trim();
+
+    if (!newName) {
+      alert("Nazwa nie może być pusta.");
+      return;
+    }
+
+    const body = new URLSearchParams({
+      index: String(index),
+      name: newName,
+      url: newUrl
+      ,homepage: newHomepage
+    });
+
+    const res = await fetch('/api/stations/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body
+    });
+
+    if (res.ok) {
+      station.name = newName;
+      station.url = newUrl;
+      station.homepage = newHomepage;
+      renderStationList();
+    } else {
+      alert("Nie udało się zapisać.");
+    }
+  };
+
+  // fókusz a névre
+  nameInput.focus();
+};
+
+
+                // Drag & drop: only start if handle was used
+                const handle = btn.querySelector('.drag-handle');
+                handle.onmousedown = (e) => { e.stopPropagation(); };
+                handle.ontouchstart = (e) => { e.stopPropagation(); };
+
+                // Drag & drop (HTML5) — start only from the handle
+                handle.draggable = true;
+
+                handle.addEventListener('dragstart', (e) => {
+                    e.stopPropagation();
+                    btn.classList.add('dragging');
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', String(index));
+                });
+
+                handle.addEventListener('dragend', (e) => {
+                    e.stopPropagation();
+                    btn.classList.remove('dragging');
+                });
+
+
+                btn.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                });
+
+                btn.addEventListener('drop', async (e) => {
+                    e.preventDefault();
+                    const fromStr = e.dataTransfer.getData('text/plain');
+                    const from = parseInt(fromStr, 10);
+                    const to = index;
+                    if (Number.isNaN(from) || from === to) return;
+
+                    const ok = await reorderStations(from, to);
+                    if (!ok) {
+                        alert('Zmiana kolejności nie powiodła się.');
+                        return;
+                    }
+
+                    // Update local array to match UI immediately
+                    const moved = stations.splice(from, 1)[0];
+                    stations.splice(to, 0, moved);
+
+                    // Re-render to refresh indices + active highlight
+                    renderStationList();
+                });
+
+                listDiv.appendChild(btn);
+            });
+
+            highlightCurrentStation();
+        }
+
+        function filterStations() {
+            const searchText = document.getElementById('search').value.toLowerCase();
+            const buttons = document.querySelectorAll('.station-btn');
+            
+            buttons.forEach((btn, index) => {
+                const stationName = stations[btn.dataset.index].name.toLowerCase();
+                if (stationName.includes(searchText) || searchText === '') {
+                    btn.style.display = 'flex';
+                } else {
+                    btn.style.display = 'none';
+                }
+            });
+        }
+
+        async function changeStation(index) {
+            try {
+                await fetch(`/api/station?index=${index}`, { method: 'POST' });
+                currentIndex = index;
+                highlightCurrentStation();
+                setTimeout(fetchStatus, 500);
+            } catch (e) {
+                console.error('Error while switching station:', e);
+            }
+        }
+
+        async function volumeUp() {
+            if (volume < 21) {
+                volume++;
+                await fetch(`/api/volume?volume=${volume}`, { method: 'POST' });
+                document.getElementById('volumeValue').innerText = volume;
+            }
+        }
+
+        async function volumeDown() {
+            if (volume > 0) {
+                volume--;
+                await fetch(`/api/volume?volume=${volume}`, { method: 'POST' });
+                document.getElementById('volumeValue').innerText = volume;
+            }
+        }
+
+async function setJasność(val) {
+    const v = Math.max(0, Math.min(255, parseInt(val, 10) || 0));
+    document.getElementById('brightnessValue').innerText = v;
+    try {
+        await fetch(`/api/brightness?val=${v}`, { method: 'POST' });
+    } catch (e) {
+        console.log('brightness set failed', e);
+    }
+}
+
+async function fetchJasność() {
+    try {
+        const response = await fetch('/api/brightness');
+        const data = await response.json();
+        const v = Math.max(0, Math.min(255, parseInt(data.value, 10) || 0));
+        const s = document.getElementById('brightnessSlider');
+        const t = document.getElementById('brightnessValue');
+        if (s) s.value = v;
+        if (t) t.innerText = v;
+    } catch (e) {
+        console.log('brightness fetch failed', e);
+    }
+}
+
+        async function togglePlayPause() {
+            await fetch('/api/toggle', { method: 'POST' });
+            paused = !paused;
+            document.getElementById('playPauseBtn').innerHTML = paused ? '▶' : '⏸';
+        }
+
+        async function nextStation() {
+            await fetch('/api/next', { method: 'POST' });
+            setTimeout(fetchStatus, 500);
+        }
+
+        async function prevStation() {
+            await fetch('/api/prev', { method: 'POST' });
+            setTimeout(fetchStatus, 500);
+        }
+        // Playlist track léptetés (MP3 m3u)
+        async function nextTrack() {
+            await fetch('/api/track_next', { method: 'POST' });
+            setTimeout(fetchStatus, 500);
+        }
+        async function prevTrack() {
+            await fetch('/api/track_prev', { method: 'POST' });
+            setTimeout(fetchStatus, 500);
+        }
+
+
+        // ESP32 újraindítása
+        async function resetESP32() {
+            if (confirm('Czy na pewno chcesz zrestartować ESP32?')) {
+                try {
+                    const response = await fetch('/api/reset', { method: 'POST' });
+                    if (response.ok) {
+                        alert('ESP32 uruchamia się ponownie...');
+                        setTimeout(() => {
+                            location.reload();
+                        }, 5000);
+                    } else {
+                        alert('Błąd restartu!');
+                    }
+                } catch (e) {
+                    console.error('Błąd:', e);
+                    alert('Błąd sieci!');
+                }
+            }
+        }
+
+        // Indítás
+        fetchStations();
+        
+        // Buffer állapot lekérése (ha van endpoint)
+        fetchBufferStatus();
+        
+        
+// Jasność slider
+const br = document.getElementById('brightnessSlider');
+if (br) {
+    br.addEventListener('input', (e) => setJasność(e.target.value));
+}
+fetchJasność();
+
+// Autómatikus frissítés
+        setInterval(fetchStatus, 3000);
+        setInterval(fetchBufferStatus, 1000); // Buffer gyakrabban frissül
+    </script>
+</body>
+</html>

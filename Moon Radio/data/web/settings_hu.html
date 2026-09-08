@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moon Radio beállítások</title>
+    <link rel="icon" href="/web/favicon.svg" type="image/svg+xml">
+    <link rel="manifest" href="/web/site.webmanifest">
+    <meta name="theme-color" content="#0b1020">
+    <style>
+        body{
+            font-family:sans-serif;
+            background:#121212;
+            color:#e0e0e0;
+            margin:0;
+            padding:20px;
+        }
+        .container{
+            max-width:720px;
+            margin:auto;
+        }
+        h1{
+            color:#00e5ff;
+            font-weight:300;
+            text-align:center;
+            margin-bottom:8px;
+        }
+        .subtitle{
+            text-align:center;
+            color:#94a3b8;
+            margin:0 0 20px;
+        }
+        .panel{
+            background:#1e1e1e;
+            border:1px solid #333;
+            border-radius:14px;
+            margin-bottom:18px;
+            overflow:hidden;
+        }
+        .panel-header{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            padding:16px 18px;
+            background:#171717;
+            border-bottom:1px solid #2e2e2e;
+        }
+        .panel-header h2{
+            margin:0;
+            color:#7dd3fc;
+            font-size:20px;
+            font-weight:500;
+        }
+        .panel-body{
+            padding:18px;
+        }
+        .panel.collapsed .panel-body{
+            display:none;
+        }
+        .toggle-btn{
+            width:auto;
+            min-width:96px;
+            padding:8px 12px;
+            border-radius:10px;
+            border:1px solid #334155;
+            background:#273244;
+            color:#e2e8f0;
+            cursor:pointer;
+        }
+        .grid{
+            display:grid;
+            gap:12px;
+        }
+        .grid.two{
+            grid-template-columns:1fr 1fr;
+        }
+        label{
+            display:block;
+            color:#cbd5e1;
+            margin-bottom:6px;
+            font-size:14px;
+        }
+        input, select, button{
+            box-sizing:border-box;
+            width:100%;
+            padding:12px;
+            border-radius:10px;
+            border:1px solid #334155;
+            background:#111827;
+            color:#f8fafc;
+            font-size:15px;
+        }
+        input[type="checkbox"]{
+            width:auto;
+            transform:scale(1.15);
+            margin-right:10px;
+        }
+        input[type="range"]{
+            padding:0;
+        }
+        .checkbox-row{
+            display:flex;
+            align-items:center;
+            color:#f8fafc;
+        }
+        .hint{
+            color:#94a3b8;
+            font-size:13px;
+            margin-top:4px;
+            line-height:1.5;
+        }
+        .inline-row{
+            display:flex;
+            gap:10px;
+            align-items:end;
+        }
+        .inline-row > div{
+            flex:1;
+        }
+        .small-btn{
+            width:auto;
+            white-space:nowrap;
+            background:#0f766e;
+            border:none;
+            color:white;
+            font-weight:700;
+            cursor:pointer;
+        }
+        .danger-btn{
+            background:#7f1d1d;
+        }
+        .actions{
+            display:flex;
+            gap:10px;
+            flex-wrap:wrap;
+            margin-top:18px;
+        }
+        .primary{
+            background:#00acc1;
+            color:#041014;
+            font-weight:700;
+            border:none;
+            cursor:pointer;
+        }
+        .secondary{
+            background:#273244;
+            color:#e2e8f0;
+            text-decoration:none;
+            text-align:center;
+            display:inline-block;
+        }
+        .status{
+            margin-top:14px;
+            min-height:20px;
+            color:#94a3b8;
+        }
+        .upload-status{
+            min-height:20px;
+            color:#94a3b8;
+            font-size:13px;
+        }
+        @media (max-width: 620px){
+            .grid.two{
+                grid-template-columns:1fr;
+            }
+            .inline-row{
+                flex-direction:column;
+                align-items:stretch;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚙️ Beállítások</h1>
+        <p class="subtitle">Idő, háttér és időjárás kezelése egy helyen.</p>
+
+        <div class="panel" id="panel-language">
+            <div class="panel-header">
+                <h2>Nyelv</h2>
+            </div>
+            <div class="panel-body">
+                <div class="grid">
+                    <div>
+                        <label for="webLanguage">Webfelület nyelve</label>
+                        <select id="webLanguage" onchange="changeWebLanguage(this.value)">
+                            <option value="hu">Magyar</option>
+                            <option value="en">English</option>
+                            <option value="de">Deutsch</option>
+                            <option value="pl">Polski</option>
+                        </select>
+                        <div class="hint">Ez most csak a webfelület nyelvét váltja. A rádió kijelzőjének nyelvét később kötjük rá.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel collapsed" id="panel-time">
+            <div class="panel-header">
+                <h2>Idő</h2>
+                <button class="toggle-btn" type="button" onclick="togglePanel('panel-time', this)">Nyitás</button>
+            </div>
+            <div class="panel-body">
+                <div class="grid">
+                    <div>
+                        <label for="timezonePreset">Időzóna</label>
+                        <select id="timezonePreset" onchange="selectTimezonePreset(this.value)">
+                            <option value="CET-1CEST,M3.5.0,M10.5.0/3">Budapest / Közép-Európa</option>
+                            <option value="GMT0BST,M3.5.0/1,M10.5.0">London</option>
+                            <option value="EET-2EEST,M3.5.0/3,M10.5.0/4">Helsinki / Kelet-Európa</option>
+                            <option value="UTC0">UTC</option>
+                            <option value="">Egyéni POSIX érték</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="timezoneValue">Egyéni időzóna érték</label>
+                        <input id="timezoneValue" maxlength="96" placeholder="CET-1CEST,M3.5.0,M10.5.0/3">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel collapsed" id="panel-background">
+            <div class="panel-header">
+                <h2>Háttér</h2>
+                <button class="toggle-btn" type="button" onclick="togglePanel('panel-background', this)">Nyitás</button>
+            </div>
+            <div class="panel-body">
+                <div class="grid">
+                    <label class="checkbox-row">
+                        <input id="backgroundEnabled" type="checkbox">
+                        Háttérkép használata a rádió képernyőjén
+                    </label>
+
+                    <label class="checkbox-row">
+                        <input id="invertColors" type="checkbox">
+                        Kijelző színeinek invertálása
+                    </label>
+                    <div class="hint">Kapcsold be, ha a kijelzőn a világos és sötét színek fel vannak cserélve.</div>
+
+                    <label class="checkbox-row">
+                        <input id="flipScreen" type="checkbox">
+                        Kijelző 180°-os átfordítása
+                    </label>
+                    <div class="hint">A képet és az érintési koordinátákat együtt fordítja át.</div>
+
+                    <div>
+                        <label for="backgroundPreset">Háttérkép listából</label>
+                        <div class="inline-row">
+                            <div>
+                                <select id="backgroundPreset" onchange="selectBackgroundPreset(this.value)"></select>
+                            </div>
+                            <button class="small-btn danger-btn" type="button" onclick="deleteBackground()">Törlés</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="backgroundPath">Háttérkép elérési út</label>
+                        <input id="backgroundPath" maxlength="96" placeholder="/backgrounds/music_background.sr565">
+                        <div class="hint">A rádió gyors, előkészített <code>.sr565</code> háttérfájlokat használ, de itt már sima PNG/JPG/WebP képet is feltölthetsz.</div>
+                    </div>
+
+                    <div>
+                        <label for="backgroundOpacity">Háttér erőssége / láthatósága: <span id="backgroundOpacityValue">50%</span></label>
+                        <input id="backgroundOpacity" type="range" min="32" max="255" value="128" oninput="updateBackgroundOpacityLabel()">
+                        <div class="hint">Balra halványabb, jobbra erősebb háttér.</div>
+                    </div>
+
+                    <div class="grid">
+                        <div class="inline-row">
+                            <div>
+                                <label for="backgroundUpload">Új háttér feltöltése</label>
+                                <input id="backgroundUpload" type="file" accept=".sr565,.png,.jpg,.jpeg,.webp">
+                            </div>
+                            <button class="small-btn" type="button" onclick="uploadBackground()">Feltöltés</button>
+                        </div>
+                        <div class="upload-status" id="backgroundUploadStatus"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel collapsed" id="panel-visualizer">
+            <div class="panel-header">
+                <h2>Vizualizáció</h2>
+                <button class="toggle-btn" type="button" onclick="togglePanel('panel-visualizer', this)">Nyitás</button>
+            </div>
+            <div class="panel-body">
+                <div class="grid">
+                    <div>
+                        <label for="visualizerMode">Alsó kijelzősáv módja</label>
+                        <select id="visualizerMode">
+                            <option value="spectrum">Spektrum</option>
+                            <option value="vu">Sztereó VU</option>
+                            <option value="off">Üres</option>
+                        </select>
+                        <div class="hint">Nem érintőképernyős használatnál innen állítható a spektrum / VU / üres megjelenítés.</div>
+                    </div>
+                    <label class="checkbox-row">
+                        <input id="headerIpVisible" type="checkbox">
+                        Fejlécben IP-cím megjelenítése az Moon Radio felirat helyett
+                    </label>
+                    <label class="checkbox-row">
+                        <input id="wifiDetailsVisible" type="checkbox">
+                        Wi-Fi jelszint szöveges megjelenítése
+                    </label>
+                    <label class="checkbox-row">
+                        <input id="volumeGraphicVisible" type="checkbox">
+                        Hangerő grafikus ikonként jelenjen meg
+                    </label>
+                    <label class="checkbox-row">
+                        <input id="bufferBarVisible" type="checkbox">
+                        Puffer állapotjelző sáv megjelenítése az állomás neve alatt
+                    </label>
+                    <label class="checkbox-row">
+                        <input id="diagnosticsVisible" type="checkbox">
+                        Logó helyén diagnosztikai adatok megjelenítése
+                    </label>
+                    <label class="checkbox-row">
+                        <input id="albumCoversEnabled" type="checkbox">
+                        Albumborító keresése és megjelenítése a logó helyén
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel collapsed" id="panel-clocktts">
+            <div class="panel-header">
+                <h2>Google TTS</h2>
+                <button class="toggle-btn" type="button" onclick="togglePanel('panel-clocktts', this)">Nyitás</button>
+            </div>
+            <div class="panel-body">
+                <div class="grid">
+                    <label class="checkbox-row">
+                        <input id="clockTtsEnabled" type="checkbox">
+                        Idő bemondása Google TTS-sel
+                    </label>
+                    <div class="grid two">
+                        <div>
+                            <label for="clockTtsLanguage">Bemondás nyelve</label>
+                            <select id="clockTtsLanguage">
+                                <option value="HU">Magyar</option>
+                                <option value="EN">English</option>
+                                <option value="DE">Deutsch</option>
+                                <option value="PL">Polski</option>
+                                <option value="NL">Nederlands</option>
+                                <option value="FR">Français</option>
+                                <option value="RO">Română</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="clockTtsInterval">Intervallum</label>
+                            <select id="clockTtsInterval">
+                                <option value="15">15 perc</option>
+                                <option value="30">30 perc</option>
+                                <option value="60">60 perc</option>
+                            </select>
+                        </div>
+                    </div>
+                    <label class="checkbox-row">
+                        <input id="clockTtsOnlyWhenNoStream" type="checkbox">
+                        Csak akkor mondja be, ha nem szól rádió
+                    </label>
+                    <label class="checkbox-row">
+                        <input id="clockTtsQuietHoursEnabled" type="checkbox">
+                        Csendes időszak használata
+                    </label>
+                    <div class="grid two">
+                        <div>
+                            <label for="clockTtsQuietFrom">Csendes időszak kezdete</label>
+                            <input id="clockTtsQuietFrom" type="time" value="23:00">
+                        </div>
+                        <div>
+                            <label for="clockTtsQuietTo">Csendes időszak vége</label>
+                            <input id="clockTtsQuietTo" type="time" value="07:00">
+                        </div>
+                    </div>
+                    <button class="small-btn" type="button" onclick="testClockTts()">Próbabemondás</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel collapsed" id="panel-weather">
+            <div class="panel-header">
+                <h2>Időjárás</h2>
+                <button class="toggle-btn" type="button" onclick="togglePanel('panel-weather', this)">Nyitás</button>
+            </div>
+            <div class="panel-body">
+                <div class="grid">
+                    <label class="checkbox-row">
+                        <input id="weatherEnabled" type="checkbox">
+                        Időjárás megjelenítése a rádión
+                    </label>
+                    <div class="hint">Ha nincs rá szükség, itt teljesen kikapcsolható.</div>
+                    <div class="grid two">
+                        <div>
+                            <label for="weatherLatitude">Szélesség (latitude)</label>
+                            <input id="weatherLatitude" type="number" step="0.0001" placeholder="47.4979">
+                        </div>
+                        <div>
+                            <label for="weatherLongitude">Hosszúság (longitude)</label>
+                            <input id="weatherLongitude" type="number" step="0.0001" placeholder="19.0402">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="weatherInterval">Frissítés</label>
+                        <select id="weatherInterval">
+                            <option value="30">30 perc</option>
+                            <option value="60">60 perc</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="weatherMode">Kijelzett időjárás</label>
+                        <select id="weatherMode">
+                            <option value="current">Pillanatnyi időjárás</option>
+                            <option value="today">Mai előrejelzés</option>
+                            <option value="tomorrow">Holnapi előrejelzés</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button class="primary" onclick="saveSettings()">Mentés</button>
+            <a class="secondary" href="/web/index_hu.html">Vissza a rádióhoz</a>
+        </div>
+
+        <div id="settingsMessage" class="status"></div>
+    </div>
+
+    <script>
+        let currentBackgroundPath = '';
+        const currentWebLanguage = 'hu';
+        const webLanguagePaths = {
+            hu: '/web/settings_hu.html',
+            en: '/web/settings_en.html',
+            de: '/web/settings_de.html',
+            pl: '/web/settings_pl.html'
+        };
+
+        function initializeWebLanguageSelector() {
+            try {
+                localStorage.setItem('radioWebLanguage', currentWebLanguage);
+            } catch (_) {}
+            const select = document.getElementById('webLanguage');
+            if (select) select.value = currentWebLanguage;
+        }
+
+        function changeWebLanguage(language) {
+            const target = webLanguagePaths[language];
+            if (!target || language === currentWebLanguage) return;
+            try {
+                localStorage.setItem('radioWebLanguage', language);
+            } catch (_) {}
+            window.location.href = target;
+        }
+
+        function togglePanel(id, button) {
+            const panel = document.getElementById(id);
+            panel.classList.toggle('collapsed');
+            button.textContent = panel.classList.contains('collapsed') ? 'Nyitás' : 'Bezárás';
+        }
+
+        function selectTimezonePreset(value) {
+            if (value) {
+                document.getElementById('timezoneValue').value = value;
+            }
+        }
+
+        function findPreset(value) {
+            const select = document.getElementById('timezonePreset');
+            for (const option of select.options) {
+                if (option.value === value) return value;
+            }
+            return '';
+        }
+
+        function updateBackgroundOpacityLabel() {
+            const raw = Number(document.getElementById('backgroundOpacity').value || 128);
+            const percent = Math.round((raw / 255) * 100);
+            document.getElementById('backgroundOpacityValue').textContent = `${percent}%`;
+        }
+
+        function minutesToTime(value) {
+            const minutes = Number(value || 0) % 1440;
+            const hour = Math.floor(minutes / 60);
+            const minute = minutes % 60;
+            return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+        }
+
+        function timeToMinutes(value) {
+            const parts = String(value || '00:00').split(':');
+            return ((Number(parts[0] || 0) * 60) + Number(parts[1] || 0)) % 1440;
+        }
+
+        async function testClockTts() {
+            const message = document.getElementById('settingsMessage');
+            message.textContent = 'Próbabemondás indítása...';
+            try {
+                const language = document.getElementById('clockTtsLanguage').value || 'HU';
+                const response = await fetch('/api/tts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: 'Az idő próbabemondás.', language })
+                });
+                if (!response.ok) throw new Error('tts failed');
+                message.textContent = 'Próbabemondás elküldve.';
+            } catch (error) {
+                console.error(error);
+                message.textContent = 'Nem sikerült elindítani a próbabemondást.';
+            }
+        }
+
+        function selectBackgroundPreset(value) {
+            if (value) {
+                document.getElementById('backgroundPath').value = value;
+            }
+        }
+
+        async function loadBackgrounds(selectedPath = '') {
+            const select = document.getElementById('backgroundPreset');
+            try {
+                const response = await fetch('/api/backgrounds');
+                const data = await response.json();
+                const items = Array.isArray(data.items) ? data.items : [];
+                select.innerHTML = '';
+                for (const item of items) {
+                    const option = document.createElement('option');
+                    option.value = item.path;
+                    option.textContent = item.name;
+                    select.appendChild(option);
+                }
+                const custom = document.createElement('option');
+                custom.value = '';
+                custom.textContent = 'Egyéni elérési út';
+                select.appendChild(custom);
+
+                const wanted = selectedPath || data.current || '/backgrounds/music_background.sr565';
+                let found = false;
+                for (const option of select.options) {
+                    if (option.value === wanted) {
+                        select.value = wanted;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    select.value = '';
+                }
+                return data;
+            } catch (error) {
+                console.error(error);
+                return { items: [], current: '' };
+            }
+        }
+
+        async function deleteBackground() {
+            const status = document.getElementById('backgroundUploadStatus');
+            const select = document.getElementById('backgroundPreset');
+            const pathInput = document.getElementById('backgroundPath');
+            const targetPath = (pathInput.value || select.value || '').trim();
+
+            if (!targetPath) {
+                status.textContent = 'Nincs kiválasztva törölhető háttérfájl.';
+                return;
+            }
+
+            if (!targetPath.startsWith('/backgrounds/')) {
+                status.textContent = 'Csak a háttérképek mappájából lehet törölni.';
+                return;
+            }
+
+            if (document.getElementById('backgroundEnabled').checked && targetPath === currentBackgroundPath) {
+                status.textContent = 'Az aktív háttérképet előbb cseréld le vagy kapcsold ki, és csak utána töröld.';
+                return;
+            }
+
+            const confirmed = window.confirm(`Biztosan törlöd ezt a háttérfájlt?\n${targetPath}`);
+            if (!confirmed) return;
+
+            status.textContent = 'Háttér törlése...';
+            try {
+                const body = new URLSearchParams();
+                body.set('path', targetPath);
+                const response = await fetch('/api/background/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                    body: body.toString()
+                });
+                const data = await response.json();
+                if (!response.ok || data.ok === false) {
+                    throw new Error(data.error || 'delete failed');
+                }
+
+                const refreshed = await loadBackgrounds('');
+                const items = Array.isArray(refreshed.items) ? refreshed.items : [];
+                const fallbackPath = items.length ? items[0].path : '';
+                if ((pathInput.value || '').trim() === targetPath) {
+                    pathInput.value = fallbackPath;
+                }
+                status.textContent = 'Háttérfájl törölve.';
+            } catch (error) {
+                console.error(error);
+                status.textContent = `Nem sikerült törölni a háttérfájlt: ${error.message}`;
+            }
+        }
+
+        async function uploadBackground() {
+            const status = document.getElementById('backgroundUploadStatus');
+            const input = document.getElementById('backgroundUpload');
+            if (!input.files || !input.files.length) {
+                status.textContent = 'Előbb válassz ki egy háttérfájlt.';
+                return;
+            }
+
+            let file = input.files[0];
+            const originalName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const lowerName = originalName.toLowerCase();
+
+            if (!lowerName.endsWith('.sr565')) {
+                status.textContent = 'Kép átalakítása háttérformátumra...';
+                try {
+                    file = await convertImageToSr565(file);
+                } catch (error) {
+                    console.error(error);
+                    status.textContent = 'Nem sikerült a képet háttérfájllá alakítani.';
+                    return;
+                }
+            }
+
+            const fileName = originalName.replace(/\.[^.]+$/, '') + '.sr565';
+            const targetPath = `/backgrounds/${fileName}`;
+            const formData = new FormData();
+            formData.append('file', file, fileName);
+            status.textContent = 'Feltöltés...';
+
+            try {
+                const response = await fetch('/api/background/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const raw = await response.text();
+                let data = {};
+                try { data = JSON.parse(raw); } catch (_) {}
+                if (!response.ok || data.ok === false) {
+                    throw new Error(data.error || raw || 'upload failed');
+                }
+                status.textContent = 'Háttér feltöltve.';
+                const uploadedPath = data.path || targetPath;
+                document.getElementById('backgroundPath').value = uploadedPath;
+                await loadBackgrounds(uploadedPath);
+            } catch (error) {
+                console.error(error);
+                status.textContent = `Nem sikerült feltölteni a háttérfájlt: ${error.message}`;
+            }
+        }
+
+        async function convertImageToSr565(file) {
+            const imageUrl = URL.createObjectURL(file);
+            try {
+                const image = await new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = () => reject(new Error('image load failed'));
+                    img.src = imageUrl;
+                });
+
+                const width = 480;
+                const height = 320;
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                if (!ctx) throw new Error('canvas unavailable');
+
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(0, 0, width, height);
+
+                const scale = Math.max(width / image.width, height / image.height);
+                const drawWidth = image.width * scale;
+                const drawHeight = image.height * scale;
+                const dx = (width - drawWidth) / 2;
+                const dy = (height - drawHeight) / 2;
+                ctx.drawImage(image, dx, dy, drawWidth, drawHeight);
+
+                const pixels = ctx.getImageData(0, 0, width, height).data;
+                const header = new Uint8Array([0x53, 0x52, 0x35, 0x37, 0xE0, 0x01, 0x40, 0x01]);
+                const body = new Uint8Array(width * height * 2);
+                let out = 0;
+
+                for (let i = 0; i < pixels.length; i += 4) {
+                    const r = pixels[i];
+                    const g = pixels[i + 1];
+                    const b = pixels[i + 2];
+                    const rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
+                    body[out++] = (rgb565 >> 8) & 0xFF;
+                    body[out++] = rgb565 & 0xFF;
+                }
+
+                return new File(
+                    [header, body],
+                    file.name.replace(/\.[^.]+$/, '') + '.sr565',
+                    { type: 'application/octet-stream' }
+                );
+            } finally {
+                URL.revokeObjectURL(imageUrl);
+            }
+        }
+
+        async function loadSettings() {
+            const message = document.getElementById('settingsMessage');
+            message.textContent = 'Beállítások betöltése...';
+            try {
+                const response = await fetch('/api/settings');
+                const data = await response.json();
+
+                const timezone = data.timezone || 'CET-1CEST,M3.5.0,M10.5.0/3';
+                document.getElementById('timezoneValue').value = timezone;
+                document.getElementById('timezonePreset').value = findPreset(timezone);
+
+                const background = data.background || {};
+                const backgroundPath = background.path || '/backgrounds/music_background.sr565';
+                currentBackgroundPath = backgroundPath;
+                document.getElementById('backgroundEnabled').checked = !!background.enabled;
+                document.getElementById('invertColors').checked = !!background.invertColors;
+                document.getElementById('flipScreen').checked = !!background.flipScreen;
+                document.getElementById('backgroundPath').value = backgroundPath;
+                document.getElementById('backgroundOpacity').value = String(background.opacity || 128);
+                updateBackgroundOpacityLabel();
+                await loadBackgrounds(backgroundPath);
+
+                const visualizer = data.visualizer || {};
+                document.getElementById('visualizerMode').value = String(visualizer.mode || 'spectrum');
+                const display = data.display || {};
+                document.getElementById('headerIpVisible').checked = !!display.headerIp;
+                document.getElementById('wifiDetailsVisible').checked = !!display.wifiDetails;
+                document.getElementById('volumeGraphicVisible').checked = display.volumeGraphic !== false;
+                document.getElementById('bufferBarVisible').checked = display.bufferBar !== false;
+                document.getElementById('diagnosticsVisible').checked = !!display.diagnostics;
+                document.getElementById('albumCoversEnabled').checked = display.albumCovers !== false;
+
+                const weather = data.weather || {};
+                document.getElementById('weatherEnabled').checked = !!weather.enabled;
+                document.getElementById('weatherLatitude').value = weather.latitude ?? 47.4979;
+                document.getElementById('weatherLongitude').value = weather.longitude ?? 19.0402;
+                document.getElementById('weatherInterval').value = String(weather.intervalMinutes || 60);
+                document.getElementById('weatherMode').value = String(weather.mode || 'current');
+
+                const clockTts = data.clockTts || {};
+                document.getElementById('clockTtsEnabled').checked = !!clockTts.enabled;
+                document.getElementById('clockTtsLanguage').value = String(clockTts.language || 'HU').toUpperCase();
+                document.getElementById('clockTtsInterval').value = String(clockTts.intervalMinutes || 60);
+                document.getElementById('clockTtsOnlyWhenNoStream').checked = !!clockTts.onlyWhenNoStream;
+                document.getElementById('clockTtsQuietHoursEnabled').checked = !!clockTts.quietHoursEnabled;
+                document.getElementById('clockTtsQuietFrom').value = minutesToTime(clockTts.quietFromMinutes ?? 1380);
+                document.getElementById('clockTtsQuietTo').value = minutesToTime(clockTts.quietToMinutes ?? 420);
+
+                message.textContent = '';
+            } catch (error) {
+                console.error(error);
+                message.textContent = 'Nem sikerült betölteni a beállításokat.';
+            }
+        }
+
+        async function saveSettings() {
+            const message = document.getElementById('settingsMessage');
+            message.textContent = 'Mentés...';
+
+            const payload = {
+                timezone: document.getElementById('timezoneValue').value.trim(),
+                backgroundEnabled: document.getElementById('backgroundEnabled').checked ? 'true' : 'false',
+                invertColors: document.getElementById('invertColors').checked ? 'true' : 'false',
+                flipScreen: document.getElementById('flipScreen').checked ? 'true' : 'false',
+                backgroundPath: document.getElementById('backgroundPath').value.trim(),
+                backgroundOpacity: document.getElementById('backgroundOpacity').value,
+                visualizerMode: document.getElementById('visualizerMode').value,
+                headerIp: document.getElementById('headerIpVisible').checked ? 'true' : 'false',
+                wifiDetails: document.getElementById('wifiDetailsVisible').checked ? 'true' : 'false',
+                volumeGraphic: document.getElementById('volumeGraphicVisible').checked ? 'true' : 'false',
+                bufferBar: document.getElementById('bufferBarVisible').checked ? 'true' : 'false',
+                diagnostics: document.getElementById('diagnosticsVisible').checked ? 'true' : 'false',
+                albumCovers: document.getElementById('albumCoversEnabled').checked ? 'true' : 'false',
+                weatherEnabled: document.getElementById('weatherEnabled').checked ? 'true' : 'false',
+                latitude: document.getElementById('weatherLatitude').value.trim(),
+                longitude: document.getElementById('weatherLongitude').value.trim(),
+                intervalMinutes: document.getElementById('weatherInterval').value,
+                weatherMode: document.getElementById('weatherMode').value,
+                clockTtsEnabled: document.getElementById('clockTtsEnabled').checked ? 'true' : 'false',
+                clockTtsLanguage: document.getElementById('clockTtsLanguage').value,
+                clockTtsInterval: document.getElementById('clockTtsInterval').value,
+                clockTtsOnlyWhenNoStream: document.getElementById('clockTtsOnlyWhenNoStream').checked ? 'true' : 'false',
+                clockTtsQuietHoursEnabled: document.getElementById('clockTtsQuietHoursEnabled').checked ? 'true' : 'false',
+                clockTtsQuietFromMinutes: String(timeToMinutes(document.getElementById('clockTtsQuietFrom').value)),
+                clockTtsQuietToMinutes: String(timeToMinutes(document.getElementById('clockTtsQuietTo').value))
+            };
+
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (!response.ok || data.ok === false) {
+                    throw new Error(data.error || 'save failed');
+                }
+                currentBackgroundPath = payload.backgroundPath;
+                message.textContent = 'A beállítások elmentve.';
+            } catch (error) {
+                console.error(error);
+                message.textContent = 'Nem sikerült menteni a beállításokat.';
+            }
+        }
+
+        initializeWebLanguageSelector();
+        loadSettings();
+    </script>
+</body>
+</html>

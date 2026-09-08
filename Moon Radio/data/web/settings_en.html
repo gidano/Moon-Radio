@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moon Radio settings</title>
+    <link rel="icon" href="/web/favicon.svg" type="image/svg+xml">
+    <link rel="manifest" href="/web/site.webmanifest">
+    <meta name="theme-color" content="#0b1020">
+    <style>
+        body{
+            font-family:sans-serif;
+            background:#121212;
+            color:#e0e0e0;
+            margin:0;
+            padding:20px;
+        }
+        .container{
+            max-width:720px;
+            margin:auto;
+        }
+        h1{
+            color:#00e5ff;
+            font-weight:300;
+            text-align:center;
+            margin-bottom:8px;
+        }
+        .subtitle{
+            text-align:center;
+            color:#94a3b8;
+            margin:0 0 20px;
+        }
+        .panel{
+            background:#1e1e1e;
+            border:1px solid #333;
+            border-radius:14px;
+            margin-bottom:18px;
+            overflow:hidden;
+        }
+        .panel-header{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            padding:16px 18px;
+            background:#171717;
+            border-bottom:1px solid #2e2e2e;
+        }
+        .panel-header h2{
+            margin:0;
+            color:#7dd3fc;
+            font-size:20px;
+            font-weight:500;
+        }
+        .panel-body{
+            padding:18px;
+        }
+        .panel.collapsed .panel-body{
+            display:none;
+        }
+        .toggle-btn{
+            width:auto;
+            min-width:96px;
+            padding:8px 12px;
+            border-radius:10px;
+            border:1px solid #334155;
+            background:#273244;
+            color:#e2e8f0;
+            cursor:pointer;
+        }
+        .grid{
+            display:grid;
+            gap:12px;
+        }
+        .grid.two{
+            grid-template-columns:1fr 1fr;
+        }
+        label{
+            display:block;
+            color:#cbd5e1;
+            margin-bottom:6px;
+            font-size:14px;
+        }
+        input, select, button{
+            box-sizing:border-box;
+            width:100%;
+            padding:12px;
+            border-radius:10px;
+            border:1px solid #334155;
+            background:#111827;
+            color:#f8fafc;
+            font-size:15px;
+        }
+        input[type="checkbox"]{
+            width:auto;
+            transform:scale(1.15);
+            margin-right:10px;
+        }
+        input[type="range"]{
+            padding:0;
+        }
+        .checkbox-row{
+            display:flex;
+            align-items:center;
+            color:#f8fafc;
+        }
+        .hint{
+            color:#94a3b8;
+            font-size:13px;
+            margin-top:4px;
+            line-height:1.5;
+        }
+        .inline-row{
+            display:flex;
+            gap:10px;
+            align-items:end;
+        }
+        .inline-row > div{
+            flex:1;
+        }
+        .small-btn{
+            width:auto;
+            white-space:nowrap;
+            background:#0f766e;
+            border:none;
+            color:white;
+            font-weight:700;
+            cursor:pointer;
+        }
+        .danger-btn{
+            background:#7f1d1d;
+        }
+        .actions{
+            display:flex;
+            gap:10px;
+            flex-wrap:wrap;
+            margin-top:18px;
+        }
+        .primary{
+            background:#00acc1;
+            color:#041014;
+            font-weight:700;
+            border:none;
+            cursor:pointer;
+        }
+        .secondary{
+            background:#273244;
+            color:#e2e8f0;
+            text-decoration:none;
+            text-align:center;
+            display:inline-block;
+        }
+        .status{
+            margin-top:14px;
+            min-height:20px;
+            color:#94a3b8;
+        }
+        .upload-status{
+            min-height:20px;
+            color:#94a3b8;
+            font-size:13px;
+        }
+        @media (max-width: 620px){
+            .grid.two{
+                grid-template-columns:1fr;
+            }
+            .inline-row{
+                flex-direction:column;
+                align-items:stretch;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚙️ Settings</h1>
+        <p class="subtitle">Time, background and weather in one place.</p>
+
+        <div class="panel" id="panel-language">
+            <div class="panel-header">
+                <h2>Language</h2>
+            </div>
+            <div class="panel-body">
+                <div class="grid">
+                    <div>
+                        <label for="webLanguage">Web interface language</label>
+                        <select id="webLanguage" onchange="changeWebLanguage(this.value)">
+                            <option value="hu">Hungarian</option>
+                            <option value="en">English</option>
+                            <option value="de">Deutsch</option>
+                            <option value="pl">Polski</option>
+                        </select>
+                        <div class="hint">For now this only changes the web interface language. The radio display language will be connected later.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel collapsed" id="panel-time">
+            <div class="panel-header">
+                <h2>Time</h2>
+                <button class="toggle-btn" type="button" onclick="togglePanel('panel-time', this)">Open</button>
+            </div>
+            <div class="panel-body">
+                <div class="grid">
+                    <div>
+                        <label for="timezonePreset">Time zone</label>
+                        <select id="timezonePreset" onchange="selectTimezonePreset(this.value)">
+                            <option value="CET-1CEST,M3.5.0,M10.5.0/3">Budapest / Central Europe</option>
+                            <option value="GMT0BST,M3.5.0/1,M10.5.0">London</option>
+                            <option value="EET-2EEST,M3.5.0/3,M10.5.0/4">Helsinki / Kelet-Európa</option>
+                            <option value="UTC0">UTC</option>
+                            <option value="">Custom POSIX value</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="timezoneValue">Custom time zone value</label>
+                        <input id="timezoneValue" maxlength="96" placeholder="CET-1CEST,M3.5.0,M10.5.0/3">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel collapsed" id="panel-background">
+            <div class="panel-header">
+                <h2>Background</h2>
+                <button class="toggle-btn" type="button" onclick="togglePanel('panel-background', this)">Open</button>
+            </div>
+            <div class="panel-body">
+                <div class="grid">
+                    <label class="checkbox-row">
+                        <input id="backgroundEnabled" type="checkbox">
+                        Use background image on the radio display
+                    </label>
+
+                    <label class="checkbox-row">
+                        <input id="invertColors" type="checkbox">
+                        Invert display colors
+                    </label>
+                    <div class="hint">Enable this if light and dark colors are swapped on the display.</div>
+
+                    <label class="checkbox-row">
+                        <input id="flipScreen" type="checkbox">
+                        Rotate display 180°
+                    </label>
+                    <div class="hint">Rotates the image and touch coordinates together.</div>
+
+                    <div>
+                        <label for="backgroundPreset">Background from list</label>
+                        <div class="inline-row">
+                            <div>
+                                <select id="backgroundPreset" onchange="selectBackgroundPreset(this.value)"></select>
+                            </div>
+                            <button class="small-btn danger-btn" type="button" onclick="deleteBackground()">Delete</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="backgroundPath">Background image path</label>
+                        <input id="backgroundPath" maxlength="96" placeholder="/backgrounds/music_background.sr565">
+                        <div class="hint">The radio uses fast, prepared <code>.sr565</code> background files, but you can also upload a normal PNG/JPG/WebP image here.</div>
+                    </div>
+
+                    <div>
+                        <label for="backgroundOpacity">Background strength / visibility: <span id="backgroundOpacityValue">50%</span></label>
+                        <input id="backgroundOpacity" type="range" min="32" max="255" value="128" oninput="updateBackgroundOpacityLabel()">
+                        <div class="hint">Left is dimmer, right is stronger.</div>
+                    </div>
+
+                    <div class="grid">
+                        <div class="inline-row">
+                            <div>
+                                <label for="backgroundUpload">Upload new background</label>
+                                <input id="backgroundUpload" type="file" accept=".sr565,.png,.jpg,.jpeg,.webp">
+                            </div>
+                            <button class="small-btn" type="button" onclick="uploadBackground()">Upload</button>
+                        </div>
+                        <div class="upload-status" id="backgroundUploadStatus"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel collapsed" id="panel-visualizer">
+            <div class="panel-header">
+                <h2>Visualization</h2>
+                <button class="toggle-btn" type="button" onclick="togglePanel('panel-visualizer', this)">Open</button>
+            </div>
+            <div class="panel-body">
+                <div class="grid">
+                    <div>
+                        <label for="visualizerMode">Bottom display band mode</label>
+                        <select id="visualizerMode">
+                            <option value="spectrum">Spectrum</option>
+                            <option value="vu">Stereo VU</option>
+                            <option value="off">Blank</option>
+                        </select>
+                        <div class="hint">Use this to set spectrum / VU / blank display when no touchscreen is available.</div>
+                    </div>
+                    <label class="checkbox-row">
+                        <input id="headerIpVisible" type="checkbox">
+                        Show IP address in the header instead of Moon Radio
+                    </label>
+                    <label class="checkbox-row">
+                        <input id="wifiDetailsVisible" type="checkbox">
+                        Show Wi-Fi strength as text
+                    </label>
+                    <label class="checkbox-row">
+                        <input id="volumeGraphicVisible" type="checkbox">
+                        Show volume as graphical icon
+                    </label>
+                    <label class="checkbox-row">
+                        <input id="bufferBarVisible" type="checkbox">
+                        Show buffer status bar under the station name
+                    </label>
+                    <label class="checkbox-row">
+                        <input id="diagnosticsVisible" type="checkbox">
+                        Show diagnostics in place of the station logo
+                    </label>
+                    <label class="checkbox-row">
+                        <input id="albumCoversEnabled" type="checkbox">
+                        Search and show album covers in place of the logo
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel collapsed" id="panel-clocktts">
+            <div class="panel-header">
+                <h2>Google TTS</h2>
+                <button class="toggle-btn" type="button" onclick="togglePanel('panel-clocktts', this)">Open</button>
+            </div>
+            <div class="panel-body">
+                <div class="grid">
+                    <label class="checkbox-row">
+                        <input id="clockTtsEnabled" type="checkbox">
+                        Announce the time with Google TTS
+                    </label>
+                    <div class="grid two">
+                        <div>
+                            <label for="clockTtsLanguage">Announcement language</label>
+                            <select id="clockTtsLanguage">
+                                <option value="HU">Magyar</option>
+                                <option value="EN">English</option>
+                                <option value="DE">Deutsch</option>
+                                <option value="PL">Polski</option>
+                                <option value="NL">Nederlands</option>
+                                <option value="FR">Français</option>
+                                <option value="RO">Română</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="clockTtsInterval">Interval</label>
+                            <select id="clockTtsInterval">
+                                <option value="15">15 minutes</option>
+                                <option value="30">30 minutes</option>
+                                <option value="60">60 minutes</option>
+                            </select>
+                        </div>
+                    </div>
+                    <label class="checkbox-row">
+                        <input id="clockTtsOnlyWhenNoStream" type="checkbox">
+                        Announce only when no radio stream is playing
+                    </label>
+                    <label class="checkbox-row">
+                        <input id="clockTtsQuietHoursEnabled" type="checkbox">
+                        Use quiet hours
+                    </label>
+                    <div class="grid two">
+                        <div>
+                            <label for="clockTtsQuietFrom">Quiet hours start</label>
+                            <input id="clockTtsQuietFrom" type="time" value="23:00">
+                        </div>
+                        <div>
+                            <label for="clockTtsQuietTo">Quiet hours end</label>
+                            <input id="clockTtsQuietTo" type="time" value="07:00">
+                        </div>
+                    </div>
+                    <button class="small-btn" type="button" onclick="testClockTts()">Test announcement</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel collapsed" id="panel-weather">
+            <div class="panel-header">
+                <h2>Weather</h2>
+                <button class="toggle-btn" type="button" onclick="togglePanel('panel-weather', this)">Open</button>
+            </div>
+            <div class="panel-body">
+                <div class="grid">
+                    <label class="checkbox-row">
+                        <input id="weatherEnabled" type="checkbox">
+                        Show weather on the radio
+                    </label>
+                    <div class="hint">If you do not need it, you can turn it off completely here.</div>
+                    <div class="grid two">
+                        <div>
+                            <label for="weatherLatitude">Latitude</label>
+                            <input id="weatherLatitude" type="number" step="0.0001" placeholder="47.4979">
+                        </div>
+                        <div>
+                            <label for="weatherLongitude">Longitude</label>
+                            <input id="weatherLongitude" type="number" step="0.0001" placeholder="19.0402">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="weatherInterval">Refresh interval</label>
+                        <select id="weatherInterval">
+                            <option value="30">30 minutes</option>
+                            <option value="60">60 minutes</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="weatherMode">Displayed weather</label>
+                        <select id="weatherMode">
+                            <option value="current">Current weather</option>
+                            <option value="today">Today forecast</option>
+                            <option value="tomorrow">Tomorrow forecast</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button class="primary" onclick="saveSettings()">Save</button>
+            <a class="secondary" href="/web/index_en.html">Back to radio</a>
+        </div>
+
+        <div id="settingsMessage" class="status"></div>
+    </div>
+
+    <script>
+        let currentBackgroundPath = '';
+        const currentWebLanguage = 'en';
+        const webLanguagePaths = {
+            hu: '/web/settings_hu.html',
+            en: '/web/settings_en.html',
+            de: '/web/settings_de.html',
+            pl: '/web/settings_pl.html'
+        };
+
+        function initializeWebLanguageSelector() {
+            try {
+                localStorage.setItem('radioWebLanguage', currentWebLanguage);
+            } catch (_) {}
+            const select = document.getElementById('webLanguage');
+            if (select) select.value = currentWebLanguage;
+        }
+
+        function changeWebLanguage(language) {
+            const target = webLanguagePaths[language];
+            if (!target || language === currentWebLanguage) return;
+            try {
+                localStorage.setItem('radioWebLanguage', language);
+            } catch (_) {}
+            window.location.href = target;
+        }
+
+        function togglePanel(id, button) {
+            const panel = document.getElementById(id);
+            panel.classList.toggle('collapsed');
+            button.textContent = panel.classList.contains('collapsed') ? 'Open' : 'Close';
+        }
+
+        function selectTimezonePreset(value) {
+            if (value) {
+                document.getElementById('timezoneValue').value = value;
+            }
+        }
+
+        function findPreset(value) {
+            const select = document.getElementById('timezonePreset');
+            for (const option of select.options) {
+                if (option.value === value) return value;
+            }
+            return '';
+        }
+
+        function updateBackgroundOpacityLabel() {
+            const raw = Number(document.getElementById('backgroundOpacity').value || 128);
+            const percent = Math.round((raw / 255) * 100);
+            document.getElementById('backgroundOpacityValue').textContent = `${percent}%`;
+        }
+
+        function minutesToTime(value) {
+            const minutes = Number(value || 0) % 1440;
+            const hour = Math.floor(minutes / 60);
+            const minute = minutes % 60;
+            return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+        }
+
+        function timeToMinutes(value) {
+            const parts = String(value || '00:00').split(':');
+            return ((Number(parts[0] || 0) * 60) + Number(parts[1] || 0)) % 1440;
+        }
+
+        async function testClockTts() {
+            const message = document.getElementById('settingsMessage');
+            message.textContent = 'Starting test announcement...';
+            try {
+                const language = document.getElementById('clockTtsLanguage').value || 'EN';
+                const response = await fetch('/api/tts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: 'This is a test time announcement.', language })
+                });
+                if (!response.ok) throw new Error('tts failed');
+                message.textContent = 'Test announcement sent.';
+            } catch (error) {
+                console.error(error);
+                message.textContent = 'Could not start the test announcement.';
+            }
+        }
+
+        function selectBackgroundPreset(value) {
+            if (value) {
+                document.getElementById('backgroundPath').value = value;
+            }
+        }
+
+        async function loadBackgrounds(selectedPath = '') {
+            const select = document.getElementById('backgroundPreset');
+            try {
+                const response = await fetch('/api/backgrounds');
+                const data = await response.json();
+                const items = Array.isArray(data.items) ? data.items : [];
+                select.innerHTML = '';
+                for (const item of items) {
+                    const option = document.createElement('option');
+                    option.value = item.path;
+                    option.textContent = item.name;
+                    select.appendChild(option);
+                }
+                const custom = document.createElement('option');
+                custom.value = '';
+                custom.textContent = 'Custom path';
+                select.appendChild(custom);
+
+                const wanted = selectedPath || data.current || '/backgrounds/music_background.sr565';
+                let found = false;
+                for (const option of select.options) {
+                    if (option.value === wanted) {
+                        select.value = wanted;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    select.value = '';
+                }
+                return data;
+            } catch (error) {
+                console.error(error);
+                return { items: [], current: '' };
+            }
+        }
+
+        async function deleteBackground() {
+            const status = document.getElementById('backgroundUploadStatus');
+            const select = document.getElementById('backgroundPreset');
+            const pathInput = document.getElementById('backgroundPath');
+            const targetPath = (pathInput.value || select.value || '').trim();
+
+            if (!targetPath) {
+                status.textContent = 'No deletable background file is selected.';
+                return;
+            }
+
+            if (!targetPath.startsWith('/backgrounds/')) {
+                status.textContent = 'Only files from the backgrounds folder can be deleted.';
+                return;
+            }
+
+            if (document.getElementById('backgroundEnabled').checked && targetPath === currentBackgroundPath) {
+                status.textContent = 'Change or disable the active background first, then delete it.';
+                return;
+            }
+
+            const confirmed = window.confirm(`Are you sure you want to delete this background file?\n${targetPath}`);
+            if (!confirmed) return;
+
+            status.textContent = 'Deleting background...';
+            try {
+                const body = new URLSearchParams();
+                body.set('path', targetPath);
+                const response = await fetch('/api/background/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                    body: body.toString()
+                });
+                const data = await response.json();
+                if (!response.ok || data.ok === false) {
+                    throw new Error(data.error || 'delete failed');
+                }
+
+                const refreshed = await loadBackgrounds('');
+                const items = Array.isArray(refreshed.items) ? refreshed.items : [];
+                const fallbackPath = items.length ? items[0].path : '';
+                if ((pathInput.value || '').trim() === targetPath) {
+                    pathInput.value = fallbackPath;
+                }
+                status.textContent = 'Background file deleted.';
+            } catch (error) {
+                console.error(error);
+                status.textContent = `Could not delete the background file: ${error.message}`;
+            }
+        }
+
+        async function uploadBackground() {
+            const status = document.getElementById('backgroundUploadStatus');
+            const input = document.getElementById('backgroundUpload');
+            if (!input.files || !input.files.length) {
+                status.textContent = 'Select a background file first.';
+                return;
+            }
+
+            let file = input.files[0];
+            const originalName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const lowerName = originalName.toLowerCase();
+
+            if (!lowerName.endsWith('.sr565')) {
+                status.textContent = 'Converting image to background format...';
+                try {
+                    file = await convertImageToSr565(file);
+                } catch (error) {
+                    console.error(error);
+                    status.textContent = 'Could not convert the image to a background file.';
+                    return;
+                }
+            }
+
+            const fileName = originalName.replace(/\.[^.]+$/, '') + '.sr565';
+            const targetPath = `/backgrounds/${fileName}`;
+            const formData = new FormData();
+            formData.append('file', file, fileName);
+            status.textContent = 'Upload...';
+
+            try {
+                const response = await fetch('/api/background/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const raw = await response.text();
+                let data = {};
+                try { data = JSON.parse(raw); } catch (_) {}
+                if (!response.ok || data.ok === false) {
+                    throw new Error(data.error || raw || 'upload failed');
+                }
+                status.textContent = 'Background uploaded.';
+                const uploadedPath = data.path || targetPath;
+                document.getElementById('backgroundPath').value = uploadedPath;
+                await loadBackgrounds(uploadedPath);
+            } catch (error) {
+                console.error(error);
+                status.textContent = `Could not upload the background file: ${error.message}`;
+            }
+        }
+
+        async function convertImageToSr565(file) {
+            const imageUrl = URL.createObjectURL(file);
+            try {
+                const image = await new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = () => reject(new Error('image load failed'));
+                    img.src = imageUrl;
+                });
+
+                const width = 480;
+                const height = 320;
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                if (!ctx) throw new Error('canvas unavailable');
+
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(0, 0, width, height);
+
+                const scale = Math.max(width / image.width, height / image.height);
+                const drawWidth = image.width * scale;
+                const drawHeight = image.height * scale;
+                const dx = (width - drawWidth) / 2;
+                const dy = (height - drawHeight) / 2;
+                ctx.drawImage(image, dx, dy, drawWidth, drawHeight);
+
+                const pixels = ctx.getImageData(0, 0, width, height).data;
+                const header = new Uint8Array([0x53, 0x52, 0x35, 0x37, 0xE0, 0x01, 0x40, 0x01]);
+                const body = new Uint8Array(width * height * 2);
+                let out = 0;
+
+                for (let i = 0; i < pixels.length; i += 4) {
+                    const r = pixels[i];
+                    const g = pixels[i + 1];
+                    const b = pixels[i + 2];
+                    const rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
+                    body[out++] = (rgb565 >> 8) & 0xFF;
+                    body[out++] = rgb565 & 0xFF;
+                }
+
+                return new File(
+                    [header, body],
+                    file.name.replace(/\.[^.]+$/, '') + '.sr565',
+                    { type: 'application/octet-stream' }
+                );
+            } finally {
+                URL.revokeObjectURL(imageUrl);
+            }
+        }
+
+        async function loadSettings() {
+            const message = document.getElementById('settingsMessage');
+            message.textContent = 'Loading settings...';
+            try {
+                const response = await fetch('/api/settings');
+                const data = await response.json();
+
+                const timezone = data.timezone || 'CET-1CEST,M3.5.0,M10.5.0/3';
+                document.getElementById('timezoneValue').value = timezone;
+                document.getElementById('timezonePreset').value = findPreset(timezone);
+
+                const background = data.background || {};
+                const backgroundPath = background.path || '/backgrounds/music_background.sr565';
+                currentBackgroundPath = backgroundPath;
+                document.getElementById('backgroundEnabled').checked = !!background.enabled;
+                document.getElementById('invertColors').checked = !!background.invertColors;
+                document.getElementById('flipScreen').checked = !!background.flipScreen;
+                document.getElementById('backgroundPath').value = backgroundPath;
+                document.getElementById('backgroundOpacity').value = String(background.opacity || 128);
+                updateBackgroundOpacityLabel();
+                await loadBackgrounds(backgroundPath);
+
+                const visualizer = data.visualizer || {};
+                document.getElementById('visualizerMode').value = String(visualizer.mode || 'spectrum');
+                const display = data.display || {};
+                document.getElementById('headerIpVisible').checked = !!display.headerIp;
+                document.getElementById('wifiDetailsVisible').checked = !!display.wifiDetails;
+                document.getElementById('volumeGraphicVisible').checked = display.volumeGraphic !== false;
+                document.getElementById('bufferBarVisible').checked = display.bufferBar !== false;
+                document.getElementById('diagnosticsVisible').checked = !!display.diagnostics;
+                document.getElementById('albumCoversEnabled').checked = display.albumCovers !== false;
+
+                const weather = data.weather || {};
+                document.getElementById('weatherEnabled').checked = !!weather.enabled;
+                document.getElementById('weatherLatitude').value = weather.latitude ?? 47.4979;
+                document.getElementById('weatherLongitude').value = weather.longitude ?? 19.0402;
+                document.getElementById('weatherInterval').value = String(weather.intervalMinutes || 60);
+                document.getElementById('weatherMode').value = String(weather.mode || 'current');
+
+                const clockTts = data.clockTts || {};
+                document.getElementById('clockTtsEnabled').checked = !!clockTts.enabled;
+                document.getElementById('clockTtsLanguage').value = String(clockTts.language || 'EN').toUpperCase();
+                document.getElementById('clockTtsInterval').value = String(clockTts.intervalMinutes || 60);
+                document.getElementById('clockTtsOnlyWhenNoStream').checked = !!clockTts.onlyWhenNoStream;
+                document.getElementById('clockTtsQuietHoursEnabled').checked = !!clockTts.quietHoursEnabled;
+                document.getElementById('clockTtsQuietFrom').value = minutesToTime(clockTts.quietFromMinutes ?? 1380);
+                document.getElementById('clockTtsQuietTo').value = minutesToTime(clockTts.quietToMinutes ?? 420);
+
+                message.textContent = '';
+            } catch (error) {
+                console.error(error);
+                message.textContent = 'Could not load settings.';
+            }
+        }
+
+        async function saveSettings() {
+            const message = document.getElementById('settingsMessage');
+            message.textContent = 'Saving...';
+
+            const payload = {
+                timezone: document.getElementById('timezoneValue').value.trim(),
+                backgroundEnabled: document.getElementById('backgroundEnabled').checked ? 'true' : 'false',
+                invertColors: document.getElementById('invertColors').checked ? 'true' : 'false',
+                flipScreen: document.getElementById('flipScreen').checked ? 'true' : 'false',
+                backgroundPath: document.getElementById('backgroundPath').value.trim(),
+                backgroundOpacity: document.getElementById('backgroundOpacity').value,
+                visualizerMode: document.getElementById('visualizerMode').value,
+                headerIp: document.getElementById('headerIpVisible').checked ? 'true' : 'false',
+                wifiDetails: document.getElementById('wifiDetailsVisible').checked ? 'true' : 'false',
+                volumeGraphic: document.getElementById('volumeGraphicVisible').checked ? 'true' : 'false',
+                bufferBar: document.getElementById('bufferBarVisible').checked ? 'true' : 'false',
+                diagnostics: document.getElementById('diagnosticsVisible').checked ? 'true' : 'false',
+                albumCovers: document.getElementById('albumCoversEnabled').checked ? 'true' : 'false',
+                weatherEnabled: document.getElementById('weatherEnabled').checked ? 'true' : 'false',
+                latitude: document.getElementById('weatherLatitude').value.trim(),
+                longitude: document.getElementById('weatherLongitude').value.trim(),
+                intervalMinutes: document.getElementById('weatherInterval').value,
+                weatherMode: document.getElementById('weatherMode').value,
+                clockTtsEnabled: document.getElementById('clockTtsEnabled').checked ? 'true' : 'false',
+                clockTtsLanguage: document.getElementById('clockTtsLanguage').value,
+                clockTtsInterval: document.getElementById('clockTtsInterval').value,
+                clockTtsOnlyWhenNoStream: document.getElementById('clockTtsOnlyWhenNoStream').checked ? 'true' : 'false',
+                clockTtsQuietHoursEnabled: document.getElementById('clockTtsQuietHoursEnabled').checked ? 'true' : 'false',
+                clockTtsQuietFromMinutes: String(timeToMinutes(document.getElementById('clockTtsQuietFrom').value)),
+                clockTtsQuietToMinutes: String(timeToMinutes(document.getElementById('clockTtsQuietTo').value))
+            };
+
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (!response.ok || data.ok === false) {
+                    throw new Error(data.error || 'save failed');
+                }
+                currentBackgroundPath = payload.backgroundPath;
+                message.textContent = 'Settings saved.';
+            } catch (error) {
+                console.error(error);
+                message.textContent = 'Could not save settings.';
+            }
+        }
+
+        initializeWebLanguageSelector();
+        loadSettings();
+    </script>
+</body>
+</html>
+
+

@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<!--
+  Author: Mirosław B. (yoRadio project)
+  Adaptation for myRadio: browser-side Radio-Browser search + add to ESP32 stations.txt
+  Minimal integration goal: keep index.html untouched (except a single link to /search).
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>myRadio - Radio Search</title>
+  <link rel="icon" href="/web/favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="/web/site.webmanifest" />
+  <meta name="theme-color" content="#0b1020" />
+  <style>
+    /* --- Look & feel aligned to existing index.html (dark) --- */
+    body{
+      font-family:sans-serif;
+      background:#121212;
+      color:#e0e0e0;
+      margin:0;
+      padding:20px;
+      text-align:center;
+    }
+    h1{color:#00e5ff;font-weight:300;margin:0 0 10px;}
+    a{color:#7fd;text-decoration:underline;}
+    .container{max-width:600px;margin:auto;}
+    .panel{
+      background:#1e1e1e;
+      border-radius:10px;
+      padding:15px;
+      margin:15px 0;
+      border:1px solid #333;
+    }
+
+    .row{margin:12px 0; display:flex; flex-direction:column; gap:6px; align-items:center;}
+    label{font-weight:600;color:#cfcfcf;}
+    input, select{
+      width:100%;
+      max-width:420px;
+      height:40px;
+      padding:8px 10px;
+      border:1px solid #333;
+      border-radius:10px;
+      background:#121212;
+      color:#e0e0e0;
+      box-sizing:border-box;
+    }
+    input:focus, select:focus{outline:none;border-color:#00e5ff;}
+
+    .btnbar{display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:10px;}
+    .btn{
+      background:#1e1e1e;
+      border:1px solid #333;
+      color:#00e5ff;
+      border-radius:12px;
+      padding:10px 14px;
+      cursor:pointer;
+      min-width:120px;
+    }
+    .btn:hover{border-color:#00e5ff;}
+    .btn.secondary{color:#e0e0e0;}
+
+    /* Player */
+    #player{
+      width:100%;
+      max-width:520px;
+      margin:10px auto 0;
+      display:block;
+    }
+    .small{font-size:12px;color:#9aa;}
+    .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;}
+
+    /* Results */
+    #results{
+      max-height:540px;
+      overflow:auto;
+      border:1px solid #333;
+      border-radius:10px;
+      background:#121212;
+    }
+    .item{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:10px;
+      border-bottom:1px solid #222;
+      background:#121212;
+    }
+    .item:nth-child(even){background:#1e1e1e;}
+    .meta{flex:1; text-align:left; overflow:hidden;}
+    .name{font-weight:700; color:#e0e0e0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .sub{font-size:12px; color:#9aa; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+    .iconbtn{
+      background:#1e1e1e;
+      border:1px solid #333;
+      border-radius:10px;
+      color:#e0e0e0;
+      padding:8px 10px;
+      cursor:pointer;
+      min-width:44px;
+    }
+    .iconbtn:hover{border-color:#00e5ff; color:#00e5ff;}
+
+    .footer{margin-top:14px;opacity:.8;font-size:12px;}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔎 Radio Search</h1>
+    <p style="margin-top:-8px"><a href="/">← Back to main page</a></p>
+
+    <div class="panel">
+      <div class="row">
+        <label for="qName">Station name</label>
+        <input id="qName" type="text" placeholder="e.g. zebradio" />
+      </div>
+
+      <div class="row">
+        <label for="qCountry">Country</label>
+        <select id="qCountry"></select>
+      </div>
+
+      <div class="row">
+        <label for="qTag">Genre (tag)</label>
+        <input id="qTag" type="text" placeholder="e.g. rock, dance, jazz..." />
+      </div>
+
+      <div class="btnbar">
+        <button class="btn" id="btnSearch">Search</button>
+        <button class="btn secondary" id="btnClear">Clear</button>
+      </div>
+
+      <div id="msg" class="small" style="margin-top:10px"></div>
+    </div>
+
+    <div class="panel">
+      <div style="font-weight:700;color:#00e5ff;margin-bottom:8px">Radio player (preview)</div>
+      <audio id="player" controls preload="none"></audio>
+      <div class="small" id="playerInfo" style="margin-top:8px"></div>
+      <div class="small mono" id="playerUrl" style="margin-top:6px"></div>
+    </div>
+
+    <div class="panel" style="padding:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="font-weight:700;color:#00e5ff">Results</div>
+        <div class="small" id="count"></div>
+      </div>
+      <div id="results" style="margin-top:10px"></div>
+    </div>
+
+    <div class="footer">
+      <div>Search module: <span class="mono">Mirosław B.</span> • Radio-Browser API</div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  // --- Radio-Browser endpoints (simple fallback) ---
+  const API_BASES = [
+    'https://de1.api.radio-browser.info',
+    'https://at1.api.radio-browser.info',
+    'https://nl1.api.radio-browser.info',
+    'https://fr1.api.radio-browser.info'
+  ];
+
+  function pickBase(){
+    return API_BASES[Math.floor(Math.random()*API_BASES.length)];
+  }
+
+  async function rbFetch(path){
+    // Try a couple of bases before failing
+    const bases = [...API_BASES];
+    // randomize order
+    for (let i=bases.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [bases[i], bases[j]] = [bases[j], bases[i]];
+    }
+    let lastErr;
+    for (const base of bases){
+      try{
+        const res = await fetch(base + path, { cache: 'no-store' });
+        if(!res.ok) throw new Error(res.status + ' ' + res.statusText);
+        return await res.json();
+      }catch(e){
+        lastErr = e;
+      }
+    }
+    throw lastErr || new Error('Radio-Browser request failed');
+  }
+
+  const el = (id)=>document.getElementById(id);
+  const qName = el('qName');
+  const qCountry = el('qCountry');
+  const qTag = el('qTag');
+  const msg = el('msg');
+  const results = el('results');
+  const count = el('count');
+  const player = el('player');
+  const playerInfo = el('playerInfo');
+  const playerUrl = el('playerUrl');
+
+  function setMsg(t){ msg.textContent = t || ''; }
+
+  function esc(s){
+    return (s||'').toString().replace(/[&<>"']/g, c=>({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+
+  async function loadCountries(){
+    setMsg('Loading country list...');
+    try{
+      const data = await rbFetch('/json/countries?hidebroken=true');
+      // Sort by name
+      data.sort((a,b)=> (a.name||'').localeCompare(b.name||''));
+
+      qCountry.innerHTML = '';
+      const optAll = document.createElement('option');
+      optAll.value = '';
+      optAll.textContent = 'Anywhere (all countries)';
+      qCountry.appendChild(optAll);
+
+      for (const c of data){
+        const o = document.createElement('option');
+        o.value = c.name || '';
+        const n = c.name || '';
+        const s = (typeof c.stationcount === 'number') ? ` (${c.stationcount})` : '';
+        o.textContent = n + s;
+        qCountry.appendChild(o);
+      }
+      setMsg('');
+    }catch(e){
+      setMsg('Failed to load country list.');
+      console.error(e);
+    }
+  }
+
+  function setPlayer(st){
+    const url = st.url_resolved || st.url || '';
+    player.src = url;
+    player.play().catch(()=>{});
+
+    const codec = st.codec ? st.codec.toUpperCase() : '';
+    const br = st.bitrate ? (st.bitrate + 'k') : '';
+    const cc = st.countrycode || '';
+    playerInfo.textContent = `${st.name || 'Unknown'}${cc ? ' - ' + cc : ''}${codec ? ' • ' + codec : ''}${br ? ' • ' + br : ''}`;
+
+    // Show link while playing (requested)
+    playerUrl.innerHTML = url ? `Stream: <a class="mono" href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>` : '';
+  }
+
+  function loadLogoImage(url){
+    return new Promise((resolve,reject)=>{
+      const image=new Image();
+      image.crossOrigin='anonymous';
+      image.onload=()=>resolve(image);
+      image.onerror=()=>reject(new Error('Logo download failed'));
+      image.src=url;
+    });
+  }
+
+  async function uploadRadioBrowserLogo(st){
+    const source=(st.favicon||'').trim();
+    if(!source) return '';
+    try{
+      const image=await loadLogoImage(source);
+      const canvas=document.createElement('canvas');
+      canvas.width=150; canvas.height=150;
+      const ctx=canvas.getContext('2d');
+      ctx.imageSmoothingEnabled=true;
+      ctx.imageSmoothingQuality='high';
+      ctx.clearRect(0,0,150,150);
+      const scale=Math.min(150/image.naturalWidth,150/image.naturalHeight);
+      const width=Math.max(1,Math.round(image.naturalWidth*scale));
+      const height=Math.max(1,Math.round(image.naturalHeight*scale));
+      ctx.drawImage(image,(150-width)/2,(150-height)/2,width,height);
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+      if(!blob) throw new Error('PNG conversion failed');
+      const id=(st.stationuuid||Date.now().toString()).replace(/[^a-zA-Z0-9_-]/g,'');
+      const form=new FormData();
+      form.append('file',blob,`rb-${id}.png`);
+      const response=await fetch('/api/logo/upload',{method:'POST',body:form});
+      const result=await response.json();
+      if(!response.ok||!result.path) throw new Error(result.error||`HTTP ${response.status}`);
+      return result.path;
+    }catch(error){
+      console.warn('Browser logo upload failed; the ESP will try the URL:',error);
+      return source;
+    }
+  }
+
+  async function addToDevice(st){
+    const name = (st.name || '').trim();
+    const url = (st.url_resolved || st.url || '').trim();
+    if(!name || !url){
+      alert('Missing name or URL.');
+      return;
+    }
+    try{
+      const logo=await uploadRadioBrowserLogo(st);
+      const homepage=(st.homepage||'').trim();
+      const res = await fetch('/api/stations/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, url, logo, homepage })
+      });
+      if(!res.ok){
+        const t = await res.text();
+        throw new Error(t || ('HTTP ' + res.status));
+      }
+      // Friendly feedback
+      alert('Station added and saved.');
+    }catch(e){
+      console.error(e);
+      alert('Failed to add station: ' + e.message);
+    }
+  }
+
+  function render(list){
+    results.innerHTML = '';
+    count.textContent = list.length ? `${list.length} results` : '';
+    if(!list.length){
+      results.innerHTML = '<div class="small" style="padding:12px;opacity:.85">No results.</div>';
+      return;
+    }
+
+    for (const st of list){
+      const row = document.createElement('div');
+      row.className = 'item';
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = st.name || 'Unknown';
+      const sub = document.createElement('div');
+      sub.className = 'sub';
+      const parts = [];
+      if (st.countrycode) parts.push(st.countrycode);
+      if (st.codec) parts.push(st.codec.toUpperCase());
+      if (st.bitrate) parts.push(st.bitrate + 'k');
+      if (st.tags) parts.push(st.tags);
+      sub.textContent = parts.join(' • ');
+      meta.appendChild(name);
+      meta.appendChild(sub);
+
+      const playBtn = document.createElement('button');
+      playBtn.className = 'iconbtn';
+      playBtn.title = 'Preview playback';
+      playBtn.textContent = '▶';
+      playBtn.onclick = ()=> setPlayer(st);
+
+      const addBtn = document.createElement('button');
+      addBtn.className = 'iconbtn';
+      addBtn.title = 'Add to radio list';
+      addBtn.textContent = '+';
+      addBtn.onclick = ()=> addToDevice(st);
+
+      row.appendChild(meta);
+      row.appendChild(playBtn);
+      row.appendChild(addBtn);
+      results.appendChild(row);
+    }
+  }
+
+  async function doSearch(){
+    const name = (qName.value || '').trim();
+    const country = (qCountry.value || '').trim();
+    const tag = (qTag.value || '').trim();
+
+    setMsg('Search...');
+    count.textContent = '';
+    results.innerHTML = '';
+
+    const params = new URLSearchParams();
+    params.set('hidebroken', 'true');
+    params.set('limit', '80');
+    // Use AND semantics by passing fields
+    if (name) params.set('name', name);
+    if (country) params.set('country', country);
+    if (tag) params.set('tag', tag);
+    // order
+    params.set('order', 'votes');
+    params.set('reverse', 'true');
+
+    try{
+      const data = await rbFetch('/json/stations/search?' + params.toString());
+      setMsg('');
+      render(Array.isArray(data) ? data : []);
+    }catch(e){
+      console.error(e);
+      setMsg('Search failed.');
+    }
+  }
+
+  el('btnSearch').addEventListener('click', doSearch);
+  el('btnClear').addEventListener('click', ()=>{
+    qName.value='';
+    qCountry.value='';
+    qTag.value='';
+    results.innerHTML='';
+    count.textContent='';
+    setMsg('');
+  });
+
+  // Enter triggers search
+  [qName, qTag].forEach(inp=>inp.addEventListener('keydown', (e)=>{
+    if(e.key==='Enter') doSearch();
+  }));
+
+  loadCountries();
+})();
+</script>
+</body>
+</html>
