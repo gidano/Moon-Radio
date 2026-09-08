@@ -17,12 +17,14 @@
 
 /* LCD DISPLAY
    Forditas elott pontosan egy DSP_MODEL sort hagyj aktivan. */
-// #define DSP_MODEL DSP_ILI9488
+#define DSP_MODEL DSP_ILI9488
 // #define DSP_MODEL DSP_ST7796
-#define DSP_MODEL DSP_AXS15231B  // Guition JC3248W535C, AXS15231B QSPI
+// #define DSP_MODEL DSP_AXS15231B  // Guition JC3248W535C, AXS15231B QSPI
 /*****************************************/
 
-/* DISPLAY PINS AXS15231B / JC3248W535C QSPI */
+/* DISPLAY PINS
+
+   AXS15231B / JC3248W535C QSPI
 #define TFT_CS    45
 #define TFT_RST   -1
 #define TFT_SCK   47
@@ -30,9 +32,9 @@
 #define TFT_D1    48
 #define TFT_D2    40
 #define TFT_D3    39
-#define BRIGHTNESS_PIN 1
+#define BRIGHTNESS_PIN 1 */
 
-/* ILI9488 / ST7796 SPI pelda
+/* ILI9488 / ST7796 SPI pelda */
 #define TFT_DC    10
 #define TFT_CS    18
 #define TFT_RST   -1
@@ -40,7 +42,6 @@
 #define TFT_MOSI  11
 //#define TFT_MISO 13
 #define BRIGHTNESS_PIN 14
-*/
 /*****************************************/
 
 /* Touch panel
@@ -48,19 +49,19 @@
    1 = erintopanel engedelyezve */
 #define TOUCH_ENABLED 1
 
-/* AXS15231B / JC3248W535C touch */
+/* AXS15231B / JC3248W535C touch
 #define TS_MODEL TS_MODEL_AXS15231B
 #define TS_SDA 4
 #define TS_SCL 8
 #define TS_INT 3
 #define TS_RST -1
-#define TS_AXS15231_FIX
+#define TS_AXS15231_FIX */
 
-/* XPT2046 rezisztiv touch pelda
+/* XPT2046 rezisztiv touch pelda */
 #define TS_MODEL TS_MODEL_XPT2046
 #define TS_CS 42
 #define TS_MISO 13
-*/
+
 
 /* FT6X36 kapacitiv touch pelda
 #define TS_MODEL TS_MODEL_FT6X36
@@ -72,16 +73,16 @@
 /*****************************************/
 
 /* SD CARD */
-#define SDC_CS    10
+#define SDC_CS    39
 #define SD_SPI_HOST FSPI
 #define SD_SPIPINS 12, 13, 11, SDC_CS  // SCK, MISO, MOSI, CS
 #define SDSPISPEED 4000000 /* 4MHz - safer initial SD speed for JC3248W535 */
 /****************************************/
 
 /* I2S DAC - CS4344 / PCM5102A */
-#define I2S_DOUT 14
-#define I2S_BCLK 9
-#define I2S_LRC  46
+#define I2S_DOUT 38
+#define I2S_BCLK 21
+#define I2S_LRC  47
 //#define I2S_MCLK 15
 /*****************************************/
 
@@ -91,10 +92,10 @@
 /*****************************************/
 
 /* ENCODER 1 */
-#define ENC_BTNR 16 // S1
-#define ENC_BTNL 15 // S2
-#define ENC_BTNB 7  // KEY
-#define ENC_INTERNALPULLUP true
+#define ENC_BTNR 4 // S1
+#define ENC_BTNL 6 // S2
+#define ENC_BTNB 5  // KEY
+// #define ENC_INTERNALPULLUP true
 
 /* ENCODER 2 */
 // #define ENC2_BTNR 16 // S2
