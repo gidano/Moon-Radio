@@ -1,0 +1,7 @@
+RETRO RÁDIÓ	https://icast.connectmedia.hu/5002/live.mp3
+ZEBRÁDIÓ	https://stream.zebradio.hu:8443/zebradio
+ROLLING STONES, ROCK FM	http://stream.regenbogen2.de/rollingstones/mp3-128
+YOUVENTUS RÁDIÓ	http://s2.audiostream.hu/juventus_192k
+	
+	
+	
