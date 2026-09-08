@@ -72,7 +72,8 @@ constexpr size_t kMinimumSecureAlbumCoverBuffer = 64 * 1024;
 constexpr size_t kMinimumLosslessAlbumCoverBuffer = 256 * 1024;
 constexpr size_t kSmallAlbumArtworkBytes = 16 * 1024;
 constexpr uint8_t kMinimumLosslessAlbumContinuePercent = 12;
-constexpr uint32_t kAlbumNetworkAbortRetryMs = 5000;
+constexpr uint32_t kAlbumNetworkAbortRetryMs = 15000;
+constexpr uint32_t kMaximumAlbumNetworkRetryMs = 60000;
 constexpr size_t kMinimumAlbumInternalHeap = 24 * 1024;
 constexpr uint32_t kReadIdleTimeoutMs = 3500;
 constexpr size_t kMinimumTextFetchInternalHeap = 20 * 1024;
@@ -1386,6 +1387,7 @@ void LogoManager::setAlbumTitle(const String& combinedTitle) {
   albumRequestedAt_ = millis();
   albumStatusLoggedAt_ = 0;
   albumRetryAfter_ = 0;
+  albumDeferredRetries_ = 0;
   if (selectedSource_.isEmpty()) refreshSelection();
   Serial.printf("[cover] uj cim: %s\n", albumTitle_.c_str());
 #else
@@ -1906,8 +1908,18 @@ void LogoManager::processResult() {
       albumRequestedAt_ = millis();
       albumStatusLoggedAt_ = albumRequestedAt_;
       if (gAlbumResourceDeferred || gAlbumNetworkAborted) {
-        albumRetryAfter_ = millis() + kAlbumNetworkAbortRetryMs;
+        // Keep the feature available for weak stations, but back off after
+        // every resource-limited attempt so one title cannot continuously
+        // recreate artwork tasks while the system is under pressure.
+        if (albumDeferredRetries_ < 3) ++albumDeferredRetries_;
+        const uint32_t retryDelay = min(
+            kMaximumAlbumNetworkRetryMs,
+            kAlbumNetworkAbortRetryMs << albumDeferredRetries_);
+        albumRetryAfter_ = millis() + retryDelay;
         gAlbumProviderStartIndex = (gAlbumProviderStartIndex + 1) % 4;
+        Serial.printf("[cover] ujraproba %lu mp mulva: %s\n",
+                      static_cast<unsigned long>(retryDelay / 1000),
+                      albumTitle_.c_str());
         gAlbumNetworkAborted = false;
         gAlbumResourceDeferred = false;
       } else {
