@@ -522,6 +522,13 @@ void DisplayManager::showMaintenance() {
   resetStationSelector();
   resetPresets();
   screenMode_ = ScreenMode::Maintenance;
+#if DISPLAY_PROFILE_AXS15231B && AXS_FACTORY_DIRECT_LVGL
+  // AXS retains a full-height source for the native VU transport.  While the
+  // maintenance screen is rendered, do not composite its last VU pixels into
+  // that new screen; the VU widget has just been removed and must disappear.
+  nativeVuPixels_ = nullptr;
+  axsVuFrameReady_ = false;
+#endif
   lv_obj_t* screen = lv_screen_active();
   lv_obj_clean(screen);
   lv_obj_set_style_bg_color(screen, lv_color_hex(0x080B12), 0);
