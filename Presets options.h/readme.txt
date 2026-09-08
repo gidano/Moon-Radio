@@ -14,6 +14,12 @@ Ezeket én a 15, 17 pin valamelyikén szoktam használni.
 - options.h_ST7796_noTS azaz érintőképernyő nélkül
 több kijelzőt nem tudtam konfigurálni mert nálam nincs egyéb más 480x320-as kijelző
 
+Amennyiben a rádiólogó helyén aktuálisan hallgatott zenék albumborítóját is szeretnéd látni,
+szükséged lesz egy - ingyenes regisztrációval elérhető - API-key nevű hosszabb karakterlistára.
+Az options.h fájlban látod ezt, itt kell megadnod majd újra flashelni a rádiót. Ehhez /data frissítés nem kell:
+
+#define LASTFM_API_KEY "saját API-key kell ide"    // itt regisztrálhatsz hozzá szabadon: https://www.last.fm/api/authentication
+
 Egyéb haználati infókat a Readme-, és Functionality.md fájlok tartalmaznak!
 
 Kellemes időtöltést kíván a Moon Radio! :)
@@ -35,6 +41,12 @@ I usually use one of pins 15 or 17 for these.
 - options.h_ILI9488_noTS, i.e., without a touchscreen
 - options.h_ST7796_noTS, i.e., without a touchscreen
 I wasn’t able to configure more displays because I don’t have any other 480x320 displays
+
+If you’d like to see the album cover of the song currently playing in place of the radio logo,
+you’ll need a long string of characters called an API key—which is available after free registration.
+You’ll find this in the options.h file; you’ll need to enter it there and then reflash the radio. No /data update is required for this:
+
+#define LASTFM_API_KEY "enter your API key here"    // You can register for one for free here: https://www.last.fm/api/authentication
 
 Additional usage information is included in the Readme and Functionality.md files!
 
