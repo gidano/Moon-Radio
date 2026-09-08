@@ -1,8 +1,7 @@
 # Screenshot / Képernyőképek
 
 <p align="center">
-  <img src="https://github.com/gidano/LVGL-Radio/blob/main/Photos/LVGL-Radio.jpg" width="480">
-  <img src="https://github.com/gidano/LVGL-Radio/blob/main/Photos/LVGL-Radio_2.jpg" width="480">
+  <img src="[https://github.com/gidano/LVGL-Radio/blob/main/Photos/LVGL-Radio.jpg](https://github.com/gidano/Moon-Radio/blob/main/Photos/Moon_Radio.jpg)" width="480"><img src="[https://github.com/gidano/LVGL-Radio/blob/main/Photos/LVGL-Radio_](https://github.com/gidano/Moon-Radio/blob/main/Photos/Moon_Radio.2.jpg)" width="480">
 </p>
 
 # Moon Radio
