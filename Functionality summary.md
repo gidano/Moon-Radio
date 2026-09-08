@@ -14,6 +14,8 @@ A Moon Radio ESP32-S3 alapú internetes rádió és hálózati zenelejátszó,
 - Lejátszás/szünet, állomásváltás és hangerőszabályzás érintéssel,
   forgóencoderrel vagy a webes felületről.
 - Állomáslogó, valamint elérhető daladatok alapján megjelenő albumborító.
+  Utóbbi használata során erőforrás- vagy pufferprobléma esetén az újrapróbálás 30, 60,
+  majd legfeljebb 60 másodperces várakozással történik
 
 ### Kijelző és információk
 
@@ -23,7 +25,7 @@ A Moon Radio ESP32-S3 alapú internetes rádió és hálózati zenelejátszó,
 - Időjárás, dátum, névnap és holdfázis megjelenítése.
 - Igény szerint a logó helyén diagnosztikai nézet jeleníthető meg a puffer,
   processzor, memória és hőmérséklet adataival.
-- Induláskor Moon Radio nyitókép jelenik meg a fő rádióképernyő előtt.
+- AXS-képernyőn induláskor Moon Radio nyitókép jelenik meg a fő rádióképernyő előtt.
 
 ### Kezelés és hálózat
 
@@ -55,7 +57,9 @@ touchscreen and browser-based control.
 - Saved station list, search, editing and presets.
 - Play/pause, station selection and volume control from touch, rotary
   encoders or the browser interface.
-- Station logos and album artwork when track information is available.
+- Station logo and album cover displayed based on available song data.
+  If a resource or buffer issue occurs while displaying the album cover, the system will retry after waiting 30, 60,
+  and then up to 60 seconds
 
 ### Display and information
 
@@ -65,7 +69,7 @@ touchscreen and browser-based control.
 - Weather, date, nameday and moon-phase information.
 - Optional diagnostic view in place of the logo, showing buffer, processor,
   memory and temperature data.
-- A Moon Radio startup screen is shown before the main radio view.
+- When you launch the app, the Moon Radio splash screen appears on the AXS screen before the main radio screen.
 
 ### Control and network
 
