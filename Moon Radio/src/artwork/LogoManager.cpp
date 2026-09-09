@@ -74,9 +74,19 @@ constexpr size_t kMinimumHighBitrateAlbumCoverBuffer = 64 * 1024;
 constexpr size_t kMinimumAlbumCoverAbortBuffer = 32 * 1024;
 constexpr size_t kMinimumSecureAlbumCoverAbortBuffer = 48 * 1024;
 constexpr size_t kMinimumHighBitrateAlbumCoverAbortBuffer = 56 * 1024;
+// Sok 128 kbps-os HTTP adó nem épít 48 KiB fölé, de 36 KiB-on, hosszabb
+// megfigyelés után már el lehet kezdeni a nagyon lassított letöltést. A
+// 24 KiB-os alsó korlát kb. másfél másodpercnyi MP3 tartalékot hagy.
+constexpr size_t kMinimumLowBitrateAlbumCoverBuffer = 36 * 1024;
+constexpr size_t kMinimumLowBitrateAlbumAbortBuffer = 24 * 1024;
+// HTTPS-nél a TLS kapcsolat rövid, de érezhető pluszterhelése miatt egy
+// nagyobb, három másodpercnyi MP3-tartalék maradjon a letöltés indításakor.
+constexpr size_t kMinimumSecureLowBitrateAlbumCoverBuffer = 48 * 1024;
+constexpr size_t kMinimumSecureLowBitrateAlbumAbortBuffer = 32 * 1024;
 constexpr size_t kSmallAlbumArtworkBytes = 16 * 1024;
 constexpr uint8_t kMinimumLosslessAlbumContinuePercent = 12;
 constexpr uint32_t kAlbumBufferStabilizationMs = 3000;
+constexpr uint32_t kLowBitrateAlbumBufferStabilizationMs = 6000;
 constexpr uint32_t kAlbumNetworkAbortRetryMs = 15000;
 constexpr uint32_t kMaximumAlbumNetworkRetryMs = 60000;
 constexpr size_t kMinimumAlbumInternalHeap = 24 * 1024;
@@ -215,12 +225,6 @@ uint32_t artworkNetworkDelayMs() {
 
 bool artworkNetworkShouldAbort() {
   if (!gArtworkPlaybackRunning || !gAlbumNetworkPoliteLevel) return false;
-#if DISPLAY_PROFILE_AXS15231B
-  if (gArtworkBitrateKbps > 0 && gArtworkBitrateKbps <= 160) {
-    return gArtworkBufferFilledBytes > 0 &&
-           gArtworkBufferFilledBytes < kMinimumAxsLowBitrateAlbumAbortBuffer;
-  }
-#endif
   return gArtworkBufferFilledBytes > 0 &&
          ((gArtworkAlbumAbortBufferPercent > 0 &&
            gArtworkBufferPercent > 0 &&
@@ -1472,6 +1476,9 @@ void LogoManager::loop(bool playbackRunning, size_t bufferFilledBytes,
                                          : kMinimumAlbumCoverBuffer);
   const bool highBitrateCompressed =
       !losslessOrOgg && bitrateKbps >= 192;
+  const bool lowBitrateCompressed =
+      !losslessOrOgg && bitrateKbps > 0 && bitrateKbps <= 160;
+  uint32_t albumBufferStabilizationMs = kAlbumBufferStabilizationMs;
   if (highBitrateCompressed) {
     albumBufferTarget = max(albumBufferTarget,
                             kMinimumHighBitrateAlbumCoverBuffer);
@@ -1490,8 +1497,17 @@ void LogoManager::loop(bool playbackRunning, size_t bufferFilledBytes,
     // elsőbbséget kap az audiofolyam.
     albumAbortBuffer = kMinimumHighBitrateAlbumCoverAbortBuffer;
   }
+  if (lowBitrateCompressed) {
+    albumBufferTarget = secureAudioStream
+                            ? kMinimumSecureLowBitrateAlbumCoverBuffer
+                            : kMinimumLowBitrateAlbumCoverBuffer;
+    albumAbortBuffer = secureAudioStream
+                           ? kMinimumSecureLowBitrateAlbumAbortBuffer
+                           : kMinimumLowBitrateAlbumAbortBuffer;
+    albumBufferStabilizationMs = kLowBitrateAlbumBufferStabilizationMs;
+  }
 #if DISPLAY_PROFILE_AXS15231B
-  if (!losslessOrOgg && bitrateKbps > 0 && bitrateKbps <= 160) {
+  if (lowBitrateCompressed) {
     albumBufferTarget = kMinimumAxsLowBitrateAlbumCoverBuffer;
     albumAbortBuffer = kMinimumAxsLowBitrateAlbumAbortBuffer;
   }
@@ -1510,7 +1526,7 @@ void LogoManager::loop(bool playbackRunning, size_t bufferFilledBytes,
   const bool albumBufferStable =
       !playbackRunning ||
       (albumBufferStableAt_ &&
-       millis() - albumBufferStableAt_ >= kAlbumBufferStabilizationMs);
+       millis() - albumBufferStableAt_ >= albumBufferStabilizationMs);
 
   auto tryAlbumCoverJob = [&]() -> bool {
     if (!albumCoversEnabled_) return false;
@@ -1564,7 +1580,7 @@ void LogoManager::loop(bool playbackRunning, size_t bufferFilledBytes,
                         static_cast<unsigned>(albumBufferTarget),
                         static_cast<unsigned>(bufferPercent),
                         static_cast<unsigned>(now - albumBufferStableAt_),
-                        static_cast<unsigned>(kAlbumBufferStabilizationMs));
+                        static_cast<unsigned>(albumBufferStabilizationMs));
         } else {
           Serial.printf("[cover] varakozas pufferre: %u/%u byte %u%%\n",
                         static_cast<unsigned>(bufferFilledBytes),
@@ -2231,13 +2247,10 @@ bool LogoManager::downloadAttempt(const String& fetchUrl, const String& key,
   uint8_t buffer[1024];
   size_t written = 0;
   uint32_t lastReadAt = millis();
-  const bool smallDeclaredArtwork =
-      declaredLength > 0 &&
-      static_cast<size_t>(declaredLength) <= kSmallAlbumArtworkBytes;
   while ((http.connected() || stream->available()) &&
          (declaredLength < 0 ||
           written < static_cast<size_t>(declaredLength))) {
-    if (!smallDeclaredArtwork && artworkNetworkShouldAbort()) {
+    if (artworkNetworkShouldAbort()) {
       gAlbumNetworkAborted = true;
       gAlbumResourceDeferred = true;
       Serial.printf("[cover] kep letoltes megszakitva: puffer %u%% %u byte\n",
