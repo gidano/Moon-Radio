@@ -150,13 +150,12 @@ bool DisplayManager::begin(const NowPlayingActions& actions) {
 #endif
 
   presets_.begin();
-#if DISPLAY_PROFILE_AXS15231B && AXS_FACTORY_DIRECT_LVGL
-  // The first complete factory frame both replaces undefined GRAM and makes
-  // the deliberately hidden panel visible.  Keep this simple boot logo on
-  // screen while the normal radio interface is assembled.
-  showAxsBootLogo();
-#endif
+  // A bootlogo ugyanabból a helyi .sr565 formátumból töltődik, mint a
+  // választható háttérképek.  AXS-en ez a korábbi szöveges első képkockát
+  // váltja ki, más kijelzőn pedig ugyanazt a 480x320-as képet rajzolja ki.
+  showBootLogo();
   screen_.create(fonts_, actions);
+  releaseBootLogo();
   configureScreenNativeHooks();
   screen_.setVisualizerMode(visualizerMode_);
   screen_.setHeaderIpVisible(headerIpVisible_);
@@ -205,8 +204,12 @@ void DisplayManager::configureScreenNativeHooks() {
 #endif
 }
 
-void DisplayManager::showAxsBootLogo() {
-#if DISPLAY_PROFILE_AXS15231B && AXS_FACTORY_DIRECT_LVGL
+void DisplayManager::showBootLogo() {
+  constexpr const char* kBootLogoPath =
+      "/backgrounds/moon_radio_bootlogo_480x320.sr565";
+  constexpr size_t kPixelBytes = static_cast<size_t>(kWidth) * kHeight * 2;
+  constexpr size_t kFileBytes = 8 + kPixelBytes;
+
   if (!lvDisplay_) return;
   lv_obj_t* screen = lv_screen_active();
   lv_obj_clean(screen);
@@ -214,34 +217,58 @@ void DisplayManager::showAxsBootLogo() {
   lv_obj_set_style_text_color(screen, lv_color_hex(0xF1F5F9), 0);
   lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
 
-  lv_obj_t* accent = lv_obj_create(screen);
-  lv_obj_set_size(accent, 10, 150);
-  lv_obj_set_pos(accent, 72, 85);
-  lv_obj_set_style_bg_color(accent, lv_color_hex(0x22D3EE), 0);
-  lv_obj_set_style_border_width(accent, 0, 0);
-  lv_obj_set_style_radius(accent, 5, 0);
-  lv_obj_clear_flag(accent, LV_OBJ_FLAG_SCROLLABLE);
+  File file = LittleFS.open(kBootLogoPath, FILE_READ);
+  uint8_t header[8]{};
+  const bool valid =
+      file && file.size() == kFileBytes &&
+      file.read(header, sizeof(header)) == sizeof(header) &&
+      header[0] == 'S' && header[1] == 'R' && header[2] == '5' &&
+      header[3] == '7' && header[4] == 224 && header[5] == 1 &&
+      header[6] == 64 && header[7] == 1;
 
-  lv_obj_t* title = lv_label_create(screen);
-  lv_label_set_text(title, "Moon Radio");
-  lv_obj_set_pos(title, 108, 100);
-  lv_obj_set_style_text_font(title, fonts_.large(), 0);
-  lv_obj_set_style_text_color(title, lv_color_hex(0xF8FAFC), 0);
+  if (valid) {
+    bootLogoPixels_ = static_cast<uint8_t*>(heap_caps_malloc(
+        kPixelBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (!bootLogoPixels_) {
+      bootLogoPixels_ = static_cast<uint8_t*>(malloc(kPixelBytes));
+    }
+  }
 
-  lv_obj_t* subtitle = lv_label_create(screen);
-  lv_label_set_text(subtitle, "Indítás folyamatban...");
-  lv_obj_set_pos(subtitle, 110, 164);
-  lv_obj_set_style_text_font(subtitle, fonts_.regular(), 0);
-  lv_obj_set_style_text_color(subtitle, lv_color_hex(0x7DD3FC), 0);
+  if (valid && bootLogoPixels_ &&
+      file.read(bootLogoPixels_, kPixelBytes) == kPixelBytes) {
+    bootLogoDescriptor_ = {};
+    bootLogoDescriptor_.header.magic = LV_IMAGE_HEADER_MAGIC;
+    bootLogoDescriptor_.header.cf = LV_COLOR_FORMAT_RGB565_SWAPPED;
+    bootLogoDescriptor_.header.w = kWidth;
+    bootLogoDescriptor_.header.h = kHeight;
+    bootLogoDescriptor_.header.stride = kWidth * 2;
+    bootLogoDescriptor_.data_size = kPixelBytes;
+    bootLogoDescriptor_.data = bootLogoPixels_;
 
-  lv_obj_t* hint = lv_label_create(screen);
-  lv_label_set_text(hint, "Rádió és hálózat előkészítése");
-  lv_obj_set_pos(hint, 110, 202);
-  lv_obj_set_style_text_font(hint, fonts_.small(), 0);
-  lv_obj_set_style_text_color(hint, lv_color_hex(0x94A3B8), 0);
+    lv_obj_t* bootImage = lv_image_create(screen);
+    lv_image_set_src(bootImage, &bootLogoDescriptor_);
+    lv_obj_set_pos(bootImage, 0, 0);
+    lv_obj_clear_flag(bootImage, LV_OBJ_FLAG_SCROLLABLE);
+  } else {
+    // A normál kijelző még akkor is használható marad, ha egy hiányos
+    // fájlrendszer-feltöltésből kimarad a bootlogo.
+    if (bootLogoPixels_) {
+      free(bootLogoPixels_);
+      bootLogoPixels_ = nullptr;
+    }
+    Serial.printf("[display] bootlogo nem toltheto: %s\n", kBootLogoPath);
+  }
+  if (file) file.close();
 
   lv_refr_now(lvDisplay_);
-#endif
+}
+
+void DisplayManager::releaseBootLogo() {
+  if (bootLogoPixels_) {
+    free(bootLogoPixels_);
+    bootLogoPixels_ = nullptr;
+  }
+  bootLogoDescriptor_ = {};
 }
 
 void DisplayManager::nativeVisualizerBlit(void* context, int32_t x, int32_t y,
@@ -254,9 +281,13 @@ void DisplayManager::nativeVisualizerBlit(void* context, int32_t x, int32_t y,
   // Do not issue a 62-row QSPI sequence: it is a different controller
   // raster shape from the factory's correct 320-row LVGL sequence.
   if (x != 0 || y != kAxsVuTop || w != kAxsVuWidth ||
-      h != kAxsVuHeight || !pixels) {
+       h != kAxsVuHeight || !pixels) {
     return;
   }
+  // A natív AXS VU-képküldés megkerüli az LVGL objektumrétegeit. Ezért
+  // felugró ablaknál itt is meg kell állítani, különben a közvetlen QSPI
+  // frissítés a presetablak lefedő rétege fölé rajzol.
+  if (!manager->visualizerActive()) return;
   manager->nativeVuPixels_ = pixels;
   if (!manager->axsVuFrame_ || !manager->axsVuFrameReady_) return;
 
@@ -289,7 +320,8 @@ void DisplayManager::overlayNativeVuIntoLvglFlush(
   // Just before that full frame is sent, replace only its VU rectangle with
   // the exact pixels already supplied to the direct transport.  This keeps
   // the once-per-second UI refresh from erasing or ghosting the VU.
-  if (!nativeVuPixels_ || !lvglPixels || x != 0 || y != 0 || w != kWidth ||
+  if (!visualizerActive() || !nativeVuPixels_ || !lvglPixels || x != 0 ||
+      y != 0 || w != kWidth ||
       h != kHeight) {
     return;
   }
@@ -915,6 +947,9 @@ void DisplayManager::showPresets() {
       !actions_.selectStation)
     return;
   if (selectorActive_) hideStationSelector();
+  // Ezt a jelzőt már az objektumok felépítése előtt állítsuk be: az AXS
+  // közvetlen VU-útja nem az LVGL fedőrétegén keresztül rajzol.
+  presetActive_ = true;
 
   presetOverlay_ = lv_obj_create(lv_screen_active());
   lv_obj_set_size(presetOverlay_, kWidth, kHeight);

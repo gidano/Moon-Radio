@@ -78,7 +78,8 @@ class DisplayManager {
                                     int32_t y, int32_t w, int32_t h);
   void refreshAxsVuFrameFromLvgl(const uint16_t* lvglPixels, int32_t x,
                                  int32_t y, int32_t w, int32_t h);
-  void showAxsBootLogo();
+  void showBootLogo();
+  void releaseBootLogo();
   void calibrateTouch();
   void configureScreenNativeHooks();
   void showStationSelector();
@@ -113,6 +114,8 @@ class DisplayManager {
   // callback replaces only rows 258..319 before this is sent to AXS.
   uint16_t* axsVuFrame_{nullptr};
   const uint16_t* nativeVuPixels_{nullptr};
+  uint8_t* bootLogoPixels_{nullptr};
+  lv_image_dsc_t bootLogoDescriptor_{};
   uint32_t drawBufferPixels_{0};
   uint32_t previousTick_{0};
   uint32_t lastLvglRunAt_{0};
