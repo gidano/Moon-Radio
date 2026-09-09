@@ -1300,8 +1300,20 @@ void NowPlayingScreen::updateLogo(const String& requestedName) {
   String lower = source;
   lower.toLowerCase();
   if (lower.endsWith(".sr565")) {
+    // Az album-borító thumbnail már a logoPixels_ memóriapufferben van.
+    // A kijelző rendszeres frissítésekor nem szabad ugyanazt a 32 KiB-os
+    // fájlt újra beolvasni és közben felszabadítani a még LVGL által
+    // használt pufferét: ez erős heap/LittleFS-terhelést és instabilitást
+    // okozhat a gyakran változó ICY címeknél.
+    if (source == currentLogo_ && logoPixels_) {
+#if !DISPLAY_PROFILE_AXS15231B
+      if (logoTouchArea_) lv_obj_move_foreground(logoTouchArea_);
+#endif
+      return;
+    }
     if (loadRgb565Thumbnail(source)) {
       currentLogo_ = source;
+      logoPath_ = "R:" + source;
       return;
     }
     // Never pass an invalid/custom cache file to LVGL as if it were a normal
