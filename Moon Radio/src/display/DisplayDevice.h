@@ -42,6 +42,8 @@ class DisplayDevice : public lgfx::LGFX_Device {
   AxsFactoryTransport axsFactoryTransport_;
 #elif DISPLAY_PROFILE_ST7796
   lgfx::Panel_ST7796 panel_;
+#elif ILI9488_IPS_TUNING
+  lgfx::Panel_ILI9488IPS panel_;
 #else
   lgfx::Panel_ILI9488 panel_;
 #endif
