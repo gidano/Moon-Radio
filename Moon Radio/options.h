@@ -18,6 +18,7 @@
 /* LCD DISPLAY
    Forditas elott pontosan egy DSP_MODEL sort hagyj aktivan. */
 // #define DSP_MODEL DSP_ILI9488
+// #define ILI9488_IPS_TUNING 1  //Mosott fekete/kontraszt javitása ILI9488 IPS panelen/Fixing washed-out blacks/contrast on the ILI9488 IPS panel
 // #define DSP_MODEL DSP_ST7796
 #define DSP_MODEL DSP_AXS15231B  // Guition JC3248W535C, AXS15231B QSPI
 /*****************************************/
