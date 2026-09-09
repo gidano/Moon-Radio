@@ -125,6 +125,7 @@ class LogoManager {
   uint32_t albumRequestedAt_{0};
   uint32_t albumStatusLoggedAt_{0};
   uint32_t albumRetryAfter_{0};
+  uint32_t albumBufferStableAt_{0};
   uint8_t albumDeferredRetries_{0};
   String pendingAlbumPurgeKey_;
   String selectedSource_;

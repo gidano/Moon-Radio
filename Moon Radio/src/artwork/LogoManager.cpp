@@ -70,8 +70,13 @@ constexpr size_t kMinimumConfiguredLogoBuffer = 128 * 1024;
 constexpr size_t kMinimumAlbumCoverBuffer = 48 * 1024;
 constexpr size_t kMinimumSecureAlbumCoverBuffer = 64 * 1024;
 constexpr size_t kMinimumLosslessAlbumCoverBuffer = 256 * 1024;
+constexpr size_t kMinimumHighBitrateAlbumCoverBuffer = 64 * 1024;
+constexpr size_t kMinimumAlbumCoverAbortBuffer = 32 * 1024;
+constexpr size_t kMinimumSecureAlbumCoverAbortBuffer = 48 * 1024;
+constexpr size_t kMinimumHighBitrateAlbumCoverAbortBuffer = 56 * 1024;
 constexpr size_t kSmallAlbumArtworkBytes = 16 * 1024;
 constexpr uint8_t kMinimumLosslessAlbumContinuePercent = 12;
+constexpr uint32_t kAlbumBufferStabilizationMs = 3000;
 constexpr uint32_t kAlbumNetworkAbortRetryMs = 15000;
 constexpr uint32_t kMaximumAlbumNetworkRetryMs = 60000;
 constexpr size_t kMinimumAlbumInternalHeap = 24 * 1024;
@@ -101,6 +106,9 @@ volatile bool gArtworkPlaybackRunning = false;
 volatile size_t gArtworkBufferFilledBytes = 0;
 volatile uint8_t gArtworkBufferPercent = 0;
 volatile uint32_t gArtworkBitrateKbps = 0;
+volatile size_t gArtworkAlbumAbortBufferBytes =
+    kMinimumAlbumCoverAbortBuffer;
+volatile uint8_t gArtworkAlbumAbortBufferPercent = 0;
 
 struct ImageSize {
   uint16_t width{0};
@@ -213,12 +221,12 @@ bool artworkNetworkShouldAbort() {
            gArtworkBufferFilledBytes < kMinimumAxsLowBitrateAlbumAbortBuffer;
   }
 #endif
-  if (gAlbumNetworkPoliteLevel >= 2) {
-    return gArtworkBufferPercent > 0 &&
-           gArtworkBufferPercent < kMinimumLosslessAlbumContinuePercent;
-  }
   return gArtworkBufferFilledBytes > 0 &&
-         gArtworkBufferFilledBytes < kMinimumAlbumCoverBuffer;
+         ((gArtworkAlbumAbortBufferPercent > 0 &&
+           gArtworkBufferPercent > 0 &&
+           gArtworkBufferPercent < gArtworkAlbumAbortBufferPercent) ||
+          (gArtworkAlbumAbortBufferPercent == 0 &&
+           gArtworkBufferFilledBytes < gArtworkAlbumAbortBufferBytes));
 }
 
 uint32_t fnv1a(const String& value) {
@@ -1248,6 +1256,7 @@ void LogoManager::selectStation(const String& configuredSource,
   albumRequestedAt_ = 0;
   albumStatusLoggedAt_ = 0;
   albumRetryAfter_ = 0;
+  albumBufferStableAt_ = 0;
   pendingAlbumPurgeKey_ = "";
   radioBrowserLoaded_ = false;
   radioBrowserKey_ = stationName_;
@@ -1319,6 +1328,7 @@ void LogoManager::setAlbumCoversEnabled(bool enabled) {
   albumKey_ = "";
   albumRequestedAt_ = 0;
   albumStatusLoggedAt_ = 0;
+  albumBufferStableAt_ = 0;
   if (!previousAlbumKey.isEmpty()) {
     if (task_)
       pendingAlbumPurgeKey_ = previousAlbumKey;
@@ -1342,6 +1352,7 @@ void LogoManager::setAlbumTitle(const String& combinedTitle) {
       albumRequestedAt_ = 0;
       albumStatusLoggedAt_ = 0;
       albumRetryAfter_ = 0;
+      albumBufferStableAt_ = 0;
       if (task_)
         pendingAlbumPurgeKey_ = previousAlbumKey;
       else
@@ -1361,6 +1372,7 @@ void LogoManager::setAlbumTitle(const String& combinedTitle) {
       albumRequestedAt_ = 0;
       albumStatusLoggedAt_ = 0;
       albumRetryAfter_ = 0;
+      albumBufferStableAt_ = 0;
       if (task_ && previousAlbumKey.startsWith("album:"))
         pendingAlbumPurgeKey_ = previousAlbumKey;
       else
@@ -1387,6 +1399,7 @@ void LogoManager::setAlbumTitle(const String& combinedTitle) {
   albumRequestedAt_ = millis();
   albumStatusLoggedAt_ = 0;
   albumRetryAfter_ = 0;
+  albumBufferStableAt_ = 0;
   albumDeferredRetries_ = 0;
   if (selectedSource_.isEmpty()) refreshSelection();
   Serial.printf("[cover] uj cim: %s\n", albumTitle_.c_str());
@@ -1457,13 +1470,47 @@ void LogoManager::loop(bool playbackRunning, size_t bufferFilledBytes,
       losslessOrOgg ? kMinimumLosslessAlbumCoverBuffer
                     : (secureAudioStream ? kMinimumSecureAlbumCoverBuffer
                                          : kMinimumAlbumCoverBuffer);
+  const bool highBitrateCompressed =
+      !losslessOrOgg && bitrateKbps >= 192;
+  if (highBitrateCompressed) {
+    albumBufferTarget = max(albumBufferTarget,
+                            kMinimumHighBitrateAlbumCoverBuffer);
+  }
+  size_t albumAbortBuffer = secureAudioStream
+                                ? kMinimumSecureAlbumCoverAbortBuffer
+                                : kMinimumAlbumCoverAbortBuffer;
+  uint8_t albumAbortPercent = 0;
+  if (losslessOrOgg) {
+    // A veszteségmentes streamek nagy frame-jeihez maradjon meg a korábbi,
+    // százalékos biztonsági tartalék.
+    albumAbortPercent = kMinimumLosslessAlbumContinuePercent;
+  } else if (highBitrateCompressed) {
+    // A 320 kbps-es élő MP3 gyakran csak 70-80 kB-os tartalékot tart fenn.
+    // Ez még elég egy lassított borítóletöltéshez, 56 kB alatt viszont azonnal
+    // elsőbbséget kap az audiofolyam.
+    albumAbortBuffer = kMinimumHighBitrateAlbumCoverAbortBuffer;
+  }
 #if DISPLAY_PROFILE_AXS15231B
   if (!losslessOrOgg && bitrateKbps > 0 && bitrateKbps <= 160) {
     albumBufferTarget = kMinimumAxsLowBitrateAlbumCoverBuffer;
+    albumAbortBuffer = kMinimumAxsLowBitrateAlbumAbortBuffer;
   }
 #endif
+  gArtworkAlbumAbortBufferBytes = albumAbortBuffer;
+  gArtworkAlbumAbortBufferPercent = albumAbortPercent;
   const bool safeForAlbumCover =
       !playbackRunning || bufferFilledBytes >= albumBufferTarget;
+  if (!playbackRunning) {
+    albumBufferStableAt_ = 0;
+  } else if (safeForAlbumCover) {
+    if (!albumBufferStableAt_) albumBufferStableAt_ = millis();
+  } else {
+    albumBufferStableAt_ = 0;
+  }
+  const bool albumBufferStable =
+      !playbackRunning ||
+      (albumBufferStableAt_ &&
+       millis() - albumBufferStableAt_ >= kAlbumBufferStabilizationMs);
 
   auto tryAlbumCoverJob = [&]() -> bool {
     if (!albumCoversEnabled_) return false;
@@ -1497,10 +1544,10 @@ void LogoManager::loop(bool playbackRunning, size_t bufferFilledBytes,
         albumStatusLoggedAt_ = now;
       }
       return false;
-    } else if (!safeForAlbumCover) {
+    } else if (!safeForAlbumCover || !albumBufferStable) {
       if (now - albumRequestedAt_ >= kMaximumAlbumCoverWaitMs) {
         Serial.printf(
-            "[cover] kihagyva: nincs eleg puffer %u/%u byte %u%%: %s\n",
+            "[cover] kihagyva: nincs eleg stabil puffer %u/%u byte %u%%: %s\n",
                       static_cast<unsigned>(bufferFilledBytes),
                       static_cast<unsigned>(albumBufferTarget),
                       static_cast<unsigned>(bufferPercent),
@@ -1511,10 +1558,19 @@ void LogoManager::loop(bool playbackRunning, size_t bufferFilledBytes,
       }
       if (!albumStatusLoggedAt_ ||
           now - albumStatusLoggedAt_ >= kAlbumStatusLogIntervalMs) {
-        Serial.printf("[cover] varakozas pufferre: %u/%u byte %u%%\n",
-                      static_cast<unsigned>(bufferFilledBytes),
-                      static_cast<unsigned>(albumBufferTarget),
-                      static_cast<unsigned>(bufferPercent));
+        if (safeForAlbumCover) {
+          Serial.printf("[cover] puffer stabilizalas: %u/%u byte %u%% (%u/%u ms)\n",
+                        static_cast<unsigned>(bufferFilledBytes),
+                        static_cast<unsigned>(albumBufferTarget),
+                        static_cast<unsigned>(bufferPercent),
+                        static_cast<unsigned>(now - albumBufferStableAt_),
+                        static_cast<unsigned>(kAlbumBufferStabilizationMs));
+        } else {
+          Serial.printf("[cover] varakozas pufferre: %u/%u byte %u%%\n",
+                        static_cast<unsigned>(bufferFilledBytes),
+                        static_cast<unsigned>(albumBufferTarget),
+                        static_cast<unsigned>(bufferPercent));
+        }
         albumStatusLoggedAt_ = now;
       }
       return false;
