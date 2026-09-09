@@ -20,6 +20,7 @@
 #define DSP_MODEL DSP_ILI9488
 // #define DSP_MODEL DSP_ST7796
 // #define DSP_MODEL DSP_AXS15231B  // Guition JC3248W535C, AXS15231B QSPI
+#define ILI9488_IPS_TUNING 1  //Mosott fekete/kontraszt javitása ILI9488 IPS panelen. TN panelen legyen inaktív!
 /*****************************************/
 
 /* DISPLAY PINS
@@ -88,7 +89,7 @@
 
 /* Album cover lookup */
 #define USE_LASTFM_COVER
-#define LASTFM_API_KEY "saját API-key kell ide"    // itt regisztrálhatsz hozzá szabadon: https://www.last.fm/api/authentication
+#define LASTFM_API_KEY "9b120bd8ad9b0cf43f7918f284bcb9d6"
 /*****************************************/
 
 /* ENCODER 1 */
