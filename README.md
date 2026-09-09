@@ -1,6 +1,14 @@
 # Screenshot / Képernyőképek
 
 <p align="center">
+  <a href="https://youtu.be/3OMWfQtBlBg?si=3hZpE63FgSKS6RIv">
+    <img src="https://img.youtube.com/vi/3OMWfQtBlBg/maxresdefault.jpg"
+         alt="Moon Radio – bemutató videó"
+         width="640">
+  </a>
+</p>
+
+<p align="center">
   <img src="https://github.com/gidano/Moon-Radio/blob/main/Photos/Moon_Radio.jpg" width="480"><img src="https://github.com/gidano/Moon-Radio/blob/main/Photos/Moon_Radio.2.jpg" width="480">
 </p>
 
