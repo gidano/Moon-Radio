@@ -61,19 +61,25 @@ constexpr uint32_t kAlbumStatusLogIntervalMs = 7000;
 constexpr uint32_t kMaximumAlbumCoverWaitMs = 35000;
 constexpr uint32_t kJobBusyLogMs = 7000;
 #if DISPLAY_PROFILE_AXS15231B
-constexpr uint32_t kArtworkTaskStackBytes = 14 * 1024;
-#else
 constexpr uint32_t kArtworkTaskStackBytes = 16 * 1024;
+#else
+constexpr uint32_t kArtworkTaskStackBytes = 22 * 1024;
 #endif
 constexpr size_t kMinimumLogoNetworkBuffer = 192 * 1024;
 constexpr size_t kMinimumConfiguredLogoBuffer = 128 * 1024;
 constexpr size_t kMinimumAlbumCoverBuffer = 48 * 1024;
 constexpr size_t kMinimumSecureAlbumCoverBuffer = 64 * 1024;
 constexpr size_t kMinimumLosslessAlbumCoverBuffer = 256 * 1024;
-constexpr size_t kMinimumHighBitrateAlbumCoverBuffer = 64 * 1024;
 constexpr size_t kMinimumAlbumCoverAbortBuffer = 32 * 1024;
 constexpr size_t kMinimumSecureAlbumCoverAbortBuffer = 48 * 1024;
-constexpr size_t kMinimumHighBitrateAlbumCoverAbortBuffer = 56 * 1024;
+// Sok nagy bitrátájú, de kis hálózati előtöltést engedő adó 60-70 KiB körül
+// egyensúlyoz. A kicsinyített borító első, rövid próbájához 56 KiB már ad
+// valós indítási ablakot, a 32 KiB-os azonnali visszavonási korlát pedig
+// megtartja az audio elsőbbségét.
+constexpr size_t kMinimumOpportunisticSecureAlbumCoverBuffer = 56 * 1024;
+constexpr size_t kMinimumOpportunisticAlbumCoverBuffer = 48 * 1024;
+constexpr size_t kMinimumOpportunisticSecureAlbumAbortBuffer = 32 * 1024;
+constexpr size_t kMinimumOpportunisticAlbumAbortBuffer = 24 * 1024;
 // Sok 128 kbps-os HTTP adó nem épít 48 KiB fölé, de 36 KiB-on, hosszabb
 // megfigyelés után már el lehet kezdeni a nagyon lassított letöltést. A
 // 24 KiB-os alsó korlát kb. másfél másodpercnyi MP3 tartalékot hagy.
@@ -83,16 +89,29 @@ constexpr size_t kMinimumLowBitrateAlbumAbortBuffer = 24 * 1024;
 // nagyobb, három másodpercnyi MP3-tartalék maradjon a letöltés indításakor.
 constexpr size_t kMinimumSecureLowBitrateAlbumCoverBuffer = 48 * 1024;
 constexpr size_t kMinimumSecureLowBitrateAlbumAbortBuffer = 32 * 1024;
-constexpr size_t kSmallAlbumArtworkBytes = 16 * 1024;
 constexpr uint8_t kMinimumLosslessAlbumContinuePercent = 12;
 constexpr uint32_t kAlbumBufferStabilizationMs = 3000;
 constexpr uint32_t kLowBitrateAlbumBufferStabilizationMs = 6000;
+constexpr uint32_t kOpportunisticAlbumBufferStabilizationMs = 750;
 constexpr uint32_t kAlbumNetworkAbortRetryMs = 15000;
 constexpr uint32_t kMaximumAlbumNetworkRetryMs = 60000;
-constexpr size_t kMinimumAlbumInternalHeap = 24 * 1024;
+constexpr size_t kMinimumAlbumInternalHeap =
+    kArtworkTaskStackBytes + 20 * 1024;
 constexpr uint32_t kReadIdleTimeoutMs = 3500;
 constexpr size_t kMinimumTextFetchInternalHeap = 20 * 1024;
+constexpr size_t kMinimumTextFetchBlock = 7 * 1024;
 constexpr size_t kMinimumTextReadInternalHeap = 12 * 1024;
+// A teljes kép-letöltés (főleg TLS esetén) több belső munkaterületet használ,
+// mint a rövid API-válasz. A valós tesztben azonban a 24/9 KiB kapu a
+// 110--160 KiB-os, stabil audio puffer mellett is minden iTunes-borítót
+// kizárt: az API-kérés már biztonsággal lefutott, a 100 px-es kép pedig még
+// el sem indulhatott. Ezért a HTTPS-kép kapuja az ugyancsak bevált API-kapu
+// szintjére kerül. Az audio pufferes, letöltés közbeni azonnali megszakítás
+// változatlanul elsőbbséget élvez.
+constexpr size_t kMinimumArtworkPlainFetchInternalHeap = 16 * 1024;
+constexpr size_t kMinimumArtworkPlainFetchBlock = 6 * 1024;
+constexpr size_t kMinimumArtworkSecureFetchInternalHeap = 20 * 1024;
+constexpr size_t kMinimumArtworkSecureFetchBlock = 7 * 1024;
 #if DISPLAY_PROFILE_AXS15231B
 constexpr size_t kMinimumAxsPlainTextFetchInternalHeap = 14 * 1024;
 constexpr size_t kMinimumAxsPlainTextFetchBlock = 6 * 1024;
@@ -101,7 +120,15 @@ constexpr size_t kMinimumAxsSecureFetchBlock = 9 * 1024;
 constexpr size_t kMinimumAxsLowBitrateAlbumCoverBuffer = 24 * 1024;
 constexpr size_t kMinimumAxsLowBitrateAlbumAbortBuffer = 16 * 1024;
 #endif
+// Az audio dekoder dedikált feladata a 0. magon fut.  A borítókeresés és a
+// képdekódolás háttérmunka, ezért kétmagos célokon a másik magra kerül: egy
+// lassú HTTP/DNS/TLS művelet így nem késlelteti közvetlenül az audio feladat
+// ütemezését. Egy magos ESP32-n természetesen marad a 0. mag.
+#if CONFIG_FREERTOS_UNICORE
 constexpr BaseType_t kArtworkTaskCore = 0;
+#else
+constexpr BaseType_t kArtworkTaskCore = 1;
+#endif
 constexpr UBaseType_t kArtworkTaskPriority = 0;
 constexpr char kRadioBrowserBases[][35] = {
     "https://de1.api.radio-browser.info",
@@ -180,6 +207,39 @@ struct PsramText {
   const char* c_str() const { return data ? data : ""; }
 };
 
+struct PsramBytes {
+  uint8_t* data{nullptr};
+  size_t length{0};
+
+  ~PsramBytes() { clear(); }
+
+  PsramBytes() = default;
+  PsramBytes(const PsramBytes&) = delete;
+  PsramBytes& operator=(const PsramBytes&) = delete;
+
+  void clear() {
+    if (data) heap_caps_free(data);
+    data = nullptr;
+    length = 0;
+  }
+
+  bool resize(size_t requested) {
+    clear();
+    if (!requested) return true;
+    data = static_cast<uint8_t*>(
+        heap_caps_malloc(requested, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (!data && requested <= 64 * 1024) {
+      data = static_cast<uint8_t*>(
+          heap_caps_malloc(requested, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    }
+    if (!data) return false;
+    length = requested;
+    return true;
+  }
+
+  size_t size() const { return length; }
+};
+
 struct ScopedAlbumNetworkPoliteMode {
   explicit ScopedAlbumNetworkPoliteMode(uint8_t level)
       : previous(gAlbumNetworkPoliteLevel) {
@@ -195,6 +255,13 @@ bool losslessOrOggStream(String codec) {
   codec.toUpperCase();
   return codec.indexOf("FLAC") >= 0 || codec.indexOf("OGG") >= 0 ||
          codec.indexOf("VORBIS") >= 0;
+}
+
+bool recognizedCompressedStream(String codec) {
+  codec.toUpperCase();
+  return codec.indexOf("MP3") >= 0 || codec.indexOf("MPEG") >= 0 ||
+         codec.indexOf("AAC") >= 0 || codec.indexOf("M4A") >= 0 ||
+         codec.indexOf("OPUS") >= 0;
 }
 
 size_t artworkNetworkChunkLimit(size_t normalBytes) {
@@ -358,14 +425,18 @@ bool readBmpSize(const String& path, ImageSize& size) {
       file.close();
       return false;
     }
-    std::vector<uint8_t> bytes(length);
-    const size_t received = file.read(bytes.data(), length);
+    PsramBytes bytes;
+    if (!bytes.resize(length)) {
+      file.close();
+      return false;
+    }
+    const size_t received = file.read(bytes.data, length);
     file.close();
     if (received != length) return false;
     int width = 0;
     int height = 0;
     int channels = 0;
-    if (!stbi_info_from_memory(bytes.data(), static_cast<int>(bytes.size()),
+    if (!stbi_info_from_memory(bytes.data, static_cast<int>(bytes.size()),
                                &width, &height, &channels))
       return false;
     if (width <= 0 || height <= 0 || width > UINT16_MAX ||
@@ -391,7 +462,7 @@ bool hasVisiblePixels(const uint8_t* pixels, size_t pixelCount) {
   return false;
 }
 
-bool loadFileBytes(const String& path, std::vector<uint8_t>& bytes) {
+bool loadFileBytes(const String& path, PsramBytes& bytes) {
   File file = LittleFS.open(path, FILE_READ);
   if (!file) return false;
   const size_t length = file.size();
@@ -399,8 +470,11 @@ bool loadFileBytes(const String& path, std::vector<uint8_t>& bytes) {
     file.close();
     return false;
   }
-  bytes.resize(length);
-  const size_t received = file.read(bytes.data(), length);
+  if (!bytes.resize(length)) {
+    file.close();
+    return false;
+  }
+  const size_t received = file.read(bytes.data, length);
   file.close();
   return received == length;
 }
@@ -409,13 +483,13 @@ bool loadFileBytes(const String& path, std::vector<uint8_t>& bytes) {
                                       lgfx::LGFX_Sprite& decoded,
                                       int32_t decodedWidth,
                                       int32_t decodedHeight) {
-  std::vector<uint8_t> bytes;
+  PsramBytes bytes;
   if (!loadFileBytes(imagePath, bytes)) return false;
 
   int width = 0;
   int height = 0;
   int channels = 0;
-  stbi_uc* rgba = stbi_load_from_memory(bytes.data(),
+  stbi_uc* rgba = stbi_load_from_memory(bytes.data,
                                         static_cast<int>(bytes.size()), &width,
                                         &height, &channels, 4);
   if (!rgba || width <= 0 || height <= 0) {
@@ -506,7 +580,7 @@ bool fetchText(const String& fetchUrl, PsramText& body) {
                                            : kMinimumAxsPlainTextFetchBlock;
 #else
   const size_t requiredHeap = kMinimumTextFetchInternalHeap;
-  const size_t requiredBlock = kMinimumTextFetchInternalHeap / 2;
+  const size_t requiredBlock = kMinimumTextFetchBlock;
 #endif
   const size_t freeInternalHeap =
       heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
@@ -521,6 +595,17 @@ bool fetchText(const String& fetchUrl, PsramText& body) {
                   static_cast<unsigned>(requiredBlock),
                   secureFetch ? " HTTPS" : "");
     gAlbumResourceDeferred = true;
+    return false;
+  }
+  // A kereső API-k válaszai is ugyanazon a Wi-Fi kapcsolaton érkeznek, mint
+  // az adás. Ne csak a kép fájlának olvasásakor, hanem már a keresés előtt is
+  // engedjük vissza azonnal a sávszélt az audiónak.
+  if (artworkNetworkShouldAbort()) {
+    gAlbumNetworkAborted = true;
+    gAlbumResourceDeferred = true;
+    Serial.printf("[cover] API keresés megszakítva: puffer %u%% %u byte\n",
+                  static_cast<unsigned>(gArtworkBufferPercent),
+                  static_cast<unsigned>(gArtworkBufferFilledBytes));
     return false;
   }
   std::unique_ptr<NetworkClientSecure> secureClient;
@@ -540,6 +625,15 @@ bool fetchText(const String& fetchUrl, PsramText& body) {
   if (!http.begin(*client, fetchUrl)) return false;
   Serial.printf("[cover] HTTP keresés: %s\n", fetchUrl.c_str());
   const int code = http.GET();
+  if (artworkNetworkShouldAbort()) {
+    gAlbumNetworkAborted = true;
+    gAlbumResourceDeferred = true;
+    Serial.printf("[cover] API keresés megszakítva: puffer %u%% %u byte\n",
+                  static_cast<unsigned>(gArtworkBufferPercent),
+                  static_cast<unsigned>(gArtworkBufferFilledBytes));
+    http.end();
+    return false;
+  }
   if (code != HTTP_CODE_OK) {
     Serial.printf("[cover] HTTP hiba %d: %s\n", code, fetchUrl.c_str());
     http.end();
@@ -568,6 +662,15 @@ bool fetchText(const String& fetchUrl, PsramText& body) {
   while ((http.connected() || stream->available()) &&
          (declaredLength < 0 ||
           receivedTotal < static_cast<size_t>(declaredLength))) {
+    if (artworkNetworkShouldAbort()) {
+      gAlbumNetworkAborted = true;
+      gAlbumResourceDeferred = true;
+      Serial.printf("[cover] API keresés megszakítva: puffer %u%% %u byte\n",
+                    static_cast<unsigned>(gArtworkBufferPercent),
+                    static_cast<unsigned>(gArtworkBufferFilledBytes));
+      body.clear();
+      break;
+    }
     const size_t available = stream->available();
     if (!available) {
       if (millis() - lastReadAt > kTextReadIdleTimeoutMs) {
@@ -735,6 +838,13 @@ String lighterAlbumArtwork(String url) {
   url.replace("500x500", "120x120");
   url.replace("300x300", "170x170");
   url.replace("600x600", "170x170");
+  // Szűk hálózati ablakban a 100 px-es JPEG már bőven elegendő a 128 px-es
+  // rádió-bélyegképhez, viszont számottevően kisebb eséllyel üríti ki az
+  // audio puffert, mint a 120/170 px-es változat.
+  if (gAlbumNetworkPoliteLevel >= 2) {
+    url.replace("170x170", "100x100");
+    url.replace("120x120", "100x100");
+  }
   return url;
 }
 
@@ -876,9 +986,9 @@ bool findMusicBrainzReleaseGroupCovers(const String& artist,
   query += "\"";
 
   PsramText json;
-  String url =
-      "http://musicbrainz.org/ws/2/recording/?fmt=json&limit=5&query=" +
-      urlEncode(query);
+  const uint8_t resultLimit = gAlbumNetworkPoliteLevel >= 2 ? 1 : 5;
+  String url = "http://musicbrainz.org/ws/2/recording/?fmt=json&limit=" +
+               String(resultLimit) + "&query=" + urlEncode(query);
   if (!fetchText(url, json)) {
     Serial.println("[cover] MusicBrainz keresés HTTP hiba");
     return false;
@@ -988,9 +1098,10 @@ bool findLastFmCoverCandidates(const String& artist, const String& title,
 bool findItunesCoverCandidates(const String& artist, const String& title,
                                std::vector<String>& coverUrls) {
   const String query = artist + " " + title;
+  const bool compactSearch = gAlbumNetworkPoliteLevel >= 2;
   const String url =
-      "https://itunes.apple.com/search?media=music&entity=song&limit=5&term=" +
-      urlEncode(query);
+      "https://itunes.apple.com/search?media=music&entity=song&limit=" +
+      String(compactSearch ? 1 : 5) + "&term=" + urlEncode(query);
   PsramText json;
   if (!fetchText(url, json)) {
     Serial.println("[cover] iTunes HTTP hiba");
@@ -998,7 +1109,7 @@ bool findItunesCoverCandidates(const String& artist, const String& title,
   }
   std::vector<String> images;
   collectJsonStringFields(json.c_str(), json.length, "artworkUrl100", images,
-                          8);
+                          compactSearch ? 1 : 8);
   const size_t before = coverUrls.size();
   for (const String& image : images) {
     appendUnique(coverUrls, upgradedItunesArtwork(image));
@@ -1015,8 +1126,10 @@ bool findDeezerCoverCandidates(const String& artist, const String& title,
   query += "\" track:\"";
   query += title;
   query += "\"";
-  const String url =
-      "https://api.deezer.com/search/track?limit=5&q=" + urlEncode(query);
+  const bool compactSearch = gAlbumNetworkPoliteLevel >= 2;
+  const String url = "https://api.deezer.com/search/track?limit=" +
+                     String(compactSearch ? 1 : 5) + "&q=" +
+                     urlEncode(query);
   PsramText json;
   if (!fetchText(url, json)) {
     Serial.println("[cover] Deezer HTTP hiba");
@@ -1024,10 +1137,17 @@ bool findDeezerCoverCandidates(const String& artist, const String& title,
   }
   const size_t before = coverUrls.size();
   std::vector<String> images;
-  collectJsonStringFields(json.c_str(), json.length, "cover_medium", images,
-                          8);
-  collectJsonStringFields(json.c_str(), json.length, "cover_small", images,
-                          8);
+  // Korlátozott módban a kisebb Deezer-borító az első jelölt; normál módban
+  // marad a korábbi, részletesebb sorrend.
+  if (compactSearch) {
+    collectJsonStringFields(json.c_str(), json.length, "cover_small", images,
+                            1);
+  } else {
+    collectJsonStringFields(json.c_str(), json.length, "cover_medium", images,
+                            8);
+    collectJsonStringFields(json.c_str(), json.length, "cover_small", images,
+                            8);
+  }
   for (const String& image : images) appendUnique(coverUrls, image);
   Serial.printf("[cover] Deezer jeloltek: %u\n",
                 static_cast<unsigned>(coverUrls.size() - before));
@@ -1178,8 +1298,14 @@ bool LogoManager::downloadAlbumCover(const String& combinedTitle,
 
   std::vector<String> coverUrls;
   const uint8_t providerStart = gAlbumProviderStartIndex % 4;
+  // Korlátozott módban először a rövid iTunes-választ és a kis, közvetlen
+  // borítót kérjük. Így egy dalhoz nem kell előbb több, lassú kereső és
+  // Cover Art Archive-hívás hálózati költségét megfizetni.
+  constexpr uint8_t kCompactProviderOrder[] = {2, 3, 0, 1};
   for (uint8_t pass = 0; pass < 4; ++pass) {
-    const uint8_t provider = (providerStart + pass) % 4;
+    const uint8_t provider = conservativeMode
+                                 ? kCompactProviderOrder[(providerStart + pass) % 4]
+                                 : (providerStart + pass) % 4;
     coverUrls.clear();
 
     switch (provider) {
@@ -1476,13 +1602,14 @@ void LogoManager::loop(bool playbackRunning, size_t bufferFilledBytes,
                                          : kMinimumAlbumCoverBuffer);
   const bool highBitrateCompressed =
       !losslessOrOgg && bitrateKbps >= 192;
+  const bool bitrateNotReportedCompressed =
+      !losslessOrOgg && bitrateKbps == 0 &&
+      recognizedCompressedStream(codec);
+  const bool opportunisticCompressed =
+      highBitrateCompressed || bitrateNotReportedCompressed;
   const bool lowBitrateCompressed =
       !losslessOrOgg && bitrateKbps > 0 && bitrateKbps <= 160;
   uint32_t albumBufferStabilizationMs = kAlbumBufferStabilizationMs;
-  if (highBitrateCompressed) {
-    albumBufferTarget = max(albumBufferTarget,
-                            kMinimumHighBitrateAlbumCoverBuffer);
-  }
   size_t albumAbortBuffer = secureAudioStream
                                 ? kMinimumSecureAlbumCoverAbortBuffer
                                 : kMinimumAlbumCoverAbortBuffer;
@@ -1491,11 +1618,18 @@ void LogoManager::loop(bool playbackRunning, size_t bufferFilledBytes,
     // A veszteségmentes streamek nagy frame-jeihez maradjon meg a korábbi,
     // százalékos biztonsági tartalék.
     albumAbortPercent = kMinimumLosslessAlbumContinuePercent;
-  } else if (highBitrateCompressed) {
-    // A 320 kbps-es élő MP3 gyakran csak 70-80 kB-os tartalékot tart fenn.
-    // Ez még elég egy lassított borítóletöltéshez, 56 kB alatt viszont azonnal
-    // elsőbbséget kap az audiofolyam.
-    albumAbortBuffer = kMinimumHighBitrateAlbumCoverAbortBuffer;
+  } else if (opportunisticCompressed) {
+    // Egyes nagy bitrátájú vagy bitrate-fejléc nélküli streamek nem építik
+    // fel a klasszikus 64 KiB-os előtöltést. A gyors, kis borítóút induljon a
+    // ténylegesen elérhető 48/56 KiB-os ablakban, de 24/32 KiB alatt azonnal
+    // engedje vissza a hálózatot az audiónak.
+    albumBufferTarget = secureAudioStream
+                            ? kMinimumOpportunisticSecureAlbumCoverBuffer
+                            : kMinimumOpportunisticAlbumCoverBuffer;
+    albumAbortBuffer = secureAudioStream
+                           ? kMinimumOpportunisticSecureAlbumAbortBuffer
+                           : kMinimumOpportunisticAlbumAbortBuffer;
+    albumBufferStabilizationMs = kOpportunisticAlbumBufferStabilizationMs;
   }
   if (lowBitrateCompressed) {
     albumBufferTarget = secureAudioStream
@@ -2175,26 +2309,34 @@ String LogoManager::resolveRelativeUrl(String value,
 bool LogoManager::downloadAttempt(const String& fetchUrl, const String& key,
                                   String& imagePath) {
   Serial.printf("[logo] letoltes: %s\n", fetchUrl.c_str());
-#if DISPLAY_PROFILE_AXS15231B
-  if (fetchUrl.startsWith("https://")) {
-    const size_t freeInternalHeap =
-        heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    const size_t largestInternalBlock =
-        heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    if (freeInternalHeap < kMinimumAxsSecureFetchInternalHeap ||
-        largestInternalBlock < kMinimumAxsSecureFetchBlock) {
-      Serial.printf(
-          "[logo] HTTPS kihagyva: keves belso heap %u/%u byte, blokk=%u/%u\n",
-          static_cast<unsigned>(freeInternalHeap),
-          static_cast<unsigned>(kMinimumAxsSecureFetchInternalHeap),
-          static_cast<unsigned>(largestInternalBlock),
-          static_cast<unsigned>(kMinimumAxsSecureFetchBlock));
-      if (gAlbumNetworkPoliteLevel) gAlbumResourceDeferred = true;
-      return false;
-    }
-  }
-#endif
   const bool secureFetch = fetchUrl.startsWith("https://");
+  const size_t requiredHeap = secureFetch
+                                  ? kMinimumArtworkSecureFetchInternalHeap
+                                  : kMinimumArtworkPlainFetchInternalHeap;
+  const size_t requiredBlock = secureFetch ? kMinimumArtworkSecureFetchBlock
+                                           : kMinimumArtworkPlainFetchBlock;
+  const size_t freeInternalHeap =
+      heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  const size_t largestInternalBlock =
+      heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  if (freeInternalHeap < requiredHeap || largestInternalBlock < requiredBlock) {
+    Serial.printf(
+        "[logo] letoltes kihagyva: keves belso heap %u/%u byte, blokk=%u/%u%s\n",
+        static_cast<unsigned>(freeInternalHeap),
+        static_cast<unsigned>(requiredHeap),
+        static_cast<unsigned>(largestInternalBlock),
+        static_cast<unsigned>(requiredBlock), secureFetch ? " HTTPS" : "");
+    if (gAlbumNetworkPoliteLevel) gAlbumResourceDeferred = true;
+    return false;
+  }
+  if (artworkNetworkShouldAbort()) {
+    gAlbumNetworkAborted = true;
+    gAlbumResourceDeferred = true;
+    Serial.printf("[cover] kep letoltes nem indul: puffer %u%% %u byte\n",
+                  static_cast<unsigned>(gArtworkBufferPercent),
+                  static_cast<unsigned>(gArtworkBufferFilledBytes));
+    return false;
+  }
   std::unique_ptr<NetworkClientSecure> secureClient;
   NetworkClient plainClient;
   NetworkClient* client = &plainClient;
@@ -2561,12 +2703,12 @@ bool LogoManager::makeThumbnail(const String& imagePath, const String& key,
   thumbnail = thumbnailPath(key);
   if (validThumbnail(thumbnail)) return true;
 
-  std::vector<uint8_t> bytes;
+  PsramBytes bytes;
   if (!loadFileBytes(imagePath, bytes)) return false;
   int sourceWidth = 0;
   int sourceHeight = 0;
   int channels = 0;
-  stbi_uc* rgba = stbi_load_from_memory(bytes.data(),
+  stbi_uc* rgba = stbi_load_from_memory(bytes.data,
                                         static_cast<int>(bytes.size()),
                                         &sourceWidth, &sourceHeight,
                                         &channels, 4);
