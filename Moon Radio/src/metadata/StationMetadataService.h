@@ -26,6 +26,7 @@ class StationMetadataService {
                                String& title);
   static bool isRetroRadio(const Station& station);
   static bool isRadio1(const Station& station);
+  static bool isPetofiRadio(const Station& station);
 
   mutable SemaphoreHandle_t mutex_{nullptr};
   String title_;

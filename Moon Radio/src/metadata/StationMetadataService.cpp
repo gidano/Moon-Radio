@@ -10,8 +10,11 @@ constexpr char kRetroMetadataUrl[] =
     "https://myonlineradio.hu/get-radio-list-songs";
 constexpr char kRetroPageUrl[] = "https://myonlineradio.hu/retro-radio";
 constexpr char kRadio1PageUrl[] = "https://myonlineradio.hu/radio-1";
+constexpr char kPetofiPageUrl[] =
+    "https://myonlineradio.hu/mr2-petofi-radio";
 constexpr char kRetroStationToken[] = "\"94\"";
 constexpr char kRadio1StationToken[] = "\"1\"";
+constexpr char kPetofiStationToken[] = "\"4\"";
 constexpr uint32_t kInitialDelayMs = 10000;
 constexpr uint32_t kPollIntervalMs = 15000;
 constexpr uint32_t kRetryIntervalMs = 15000;
@@ -150,6 +153,7 @@ void StationMetadataService::selectStation(const Station* station) {
   if (station) {
     if (isRetroRadio(*station)) sourceKind_ = 1;
     else if (isRadio1(*station)) sourceKind_ = 2;
+    else if (isPetofiRadio(*station)) sourceKind_ = 3;
   }
   active_ = sourceKind_ != 0;
   title_ = "";
@@ -241,6 +245,9 @@ void StationMetadataService::fetch() {
   } else if (sourceKind == 2) {
     success =
         fetchMyOnlineRadioTitle(kRadio1PageUrl, kRadio1StationToken, nextTitle);
+  } else if (sourceKind == 3) {
+    success =
+        fetchMyOnlineRadioTitle(kPetofiPageUrl, kPetofiStationToken, nextTitle);
   }
 
   if (mutex_ && xSemaphoreTake(mutex_, pdMS_TO_TICKS(100))) {
@@ -282,7 +289,7 @@ bool StationMetadataService::fetchMyOnlineRadioTitle(const char* pageUrl,
   http.addHeader("Accept", "application/json");
   http.addHeader("Accept-Encoding", "identity");
   // A végpont Referer nélkül 200 OK mellett üres választ küld.
-  http.addHeader("Referer", kRetroPageUrl);
+  http.addHeader("Referer", pageUrl);
   http.addHeader("X-Requested-With", "XMLHttpRequest");
 
   const int code = http.GET();
@@ -333,4 +340,19 @@ bool StationMetadataService::isRadio1(const Station& station) {
          homepage.indexOf("myonlineradio.hu/radio-1") >= 0 ||
          url.indexOf("radio1") >= 0 || name.indexOf("rádió 1") >= 0 ||
          name.indexOf("radio 1") >= 0;
+}
+
+bool StationMetadataService::isPetofiRadio(const Station& station) {
+  String logo = station.logoName;
+  String url = station.url;
+  String homepage = station.homepage;
+  String name = station.name;
+  logo.toLowerCase();
+  url.toLowerCase();
+  homepage.toLowerCase();
+  name.toLowerCase();
+  return logo == "petofi" || url.indexOf("/4738/mr2") >= 0 ||
+         url.indexOf("petofi") >= 0 ||
+         homepage.indexOf("petofi") >= 0 || name.indexOf("petőfi") >= 0 ||
+         name.indexOf("petofi") >= 0;
 }
