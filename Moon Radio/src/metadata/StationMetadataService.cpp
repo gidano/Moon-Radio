@@ -253,9 +253,11 @@ void StationMetadataService::fetch() {
   if (mutex_ && xSemaphoreTake(mutex_, pdMS_TO_TICKS(100))) {
     if (success && active_ && generation == generation_) {
       nextTitle.trim();
-      title_ = nextTitle;
-      Serial.printf("[metadata] MyOnlineRadio #%u: %s\n", sourceKind_,
-                    title_.c_str());
+      if (!nextTitle.isEmpty() && nextTitle != title_) {
+        title_ = nextTitle;
+        Serial.printf("[metadata] MyOnlineRadio #%u: %s\n", sourceKind_,
+                      title_.c_str());
+      }
     }
     nextPollAt_ =
         millis() + (success ? kPollIntervalMs : kRetryIntervalMs);
