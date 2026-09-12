@@ -427,12 +427,13 @@ AudioSnapshot RadioController::audioSnapshot() {
   const Station* station = currentStation();
   AudioSnapshot snapshot =
       audio_.snapshot(station ? station->name : String("Nincs állomás"));
-  if (snapshot.streamTitle.isEmpty() && !playlistTitle_.isEmpty()) {
+  // A MyOnlineRadio által adott aktuális cím pontosabb, mint az érintett
+  // adók gyakran csak szlogent vagy műsornevet küldő stream-metaadata.
+  const String externalTitle = metadata_.title();
+  if (!externalTitle.isEmpty()) {
+    snapshot.streamTitle = externalTitle;
+  } else if (snapshot.streamTitle.isEmpty() && !playlistTitle_.isEmpty()) {
     snapshot.streamTitle = playlistTitle_;
-  }
-  if (snapshot.streamTitle.isEmpty()) {
-    const String externalTitle = metadata_.title();
-    if (!externalTitle.isEmpty()) snapshot.streamTitle = externalTitle;
   }
   return snapshot;
 }
