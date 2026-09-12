@@ -334,7 +334,9 @@ void RadioController::loop() {
   const bool running = audio_.running();
   const bool wifiConnected = wifiManager_.connected();
 
-  if (now - lastArtworkAt_ >= kArtworkServiceMs) {
+  // A MyOnlineRadio HTTPS-címlekérés közben ne induljon egy második, szintén
+  // hálózatot és belső RAM-ot használó borítófeladat.
+  if (!metadata_.busy() && now - lastArtworkAt_ >= kArtworkServiceMs) {
     lastArtworkAt_ = now;
     AudioEngine::ArtworkEvent artworkEvent;
     while (audio_.takeArtworkEvent(artworkEvent)) {
