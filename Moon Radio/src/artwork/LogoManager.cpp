@@ -146,6 +146,10 @@ volatile uint32_t gArtworkBitrateKbps = 0;
 volatile size_t gArtworkAlbumAbortBufferBytes =
     kMinimumAlbumCoverAbortBuffer;
 volatile uint8_t gArtworkAlbumAbortBufferPercent = 0;
+// Egy állomásváltás közben a korábbi háttérfeladat már nem tölthet le adatot.
+// A két érték csak 32 bites, atomi olvasás/írásra használt generációszám.
+volatile uint32_t gArtworkSelectionId = 0;
+volatile uint32_t gArtworkTaskSelectionId = 0;
 
 struct ImageSize {
   uint16_t width{0};
@@ -291,6 +295,9 @@ uint32_t artworkNetworkDelayMs() {
 }
 
 bool artworkNetworkShouldAbort() {
+  if (gArtworkTaskSelectionId != 0 &&
+      gArtworkTaskSelectionId != gArtworkSelectionId)
+    return true;
   if (!gArtworkPlaybackRunning || !gAlbumNetworkPoliteLevel) return false;
   return gArtworkBufferFilledBytes > 0 &&
          ((gArtworkAlbumAbortBufferPercent > 0 &&
@@ -656,6 +663,11 @@ bool fetchText(const String& fetchUrl, PsramText& body) {
     return false;
   }
   NetworkClient* stream = http.getStreamPtr();
+  if (!stream) {
+    Serial.println("[cover] API valasz stream hiba");
+    http.end();
+    return false;
+  }
   uint8_t buffer[512];
   size_t receivedTotal = 0;
   uint32_t lastReadAt = millis();
@@ -838,12 +850,11 @@ String lighterAlbumArtwork(String url) {
   url.replace("500x500", "120x120");
   url.replace("300x300", "170x170");
   url.replace("600x600", "170x170");
-  // Szűk hálózati ablakban a 100 px-es JPEG már bőven elegendő a 128 px-es
-  // rádió-bélyegképhez, viszont számottevően kisebb eséllyel üríti ki az
-  // audio puffert, mint a 120/170 px-es változat.
+  // A 120 px-es iTunes-borító már közel van a 128 px-es rádió-bélyegképhez,
+  // ezért sokkal tisztább marad a megjelenése. A nagyobb képeket viszont
+  // továbbra is szűkítjük, hogy a hálózati feladat rövid maradjon.
   if (gAlbumNetworkPoliteLevel >= 2) {
     url.replace("170x170", "100x100");
-    url.replace("120x120", "100x100");
   }
   return url;
 }
@@ -1401,6 +1412,7 @@ void LogoManager::selectStation(const String& configuredSource,
   }
   failedSources_.clear();
   ++selectionId_;
+  gArtworkSelectionId = selectionId_;
   searchStartedAt_ = millis();
   searchFinished_ = false;
   String noLogoThumbnail;
@@ -1997,39 +2009,42 @@ void LogoManager::executeJob(Job& job) {
   String thumbnail;
   bool success = false;
 
-  switch (job.kind) {
-    case JobKind::Remote:
-      success = downloadRemote(job.url, job.source, imagePath) &&
-                makeThumbnail(imagePath, job.source, thumbnail);
-      if (success) compactCache(imagePath, thumbnail);
-      break;
-    case JobKind::Embedded:
-      success =
-          downloadEmbedded(job.url, job.segments, job.source, imagePath) &&
-          makeThumbnail(imagePath, job.source, thumbnail);
-      if (success) compactCache(imagePath, thumbnail);
-      break;
-    case JobKind::Thumbnail:
-      success = makeThumbnail(job.localPath, job.source, thumbnail);
-      break;
-    case JobKind::BrowserImport:
-      imagePath = job.localPath;
-      success = makeThumbnail(imagePath, job.source, thumbnail);
-      if (success) compactCache(imagePath, thumbnail);
-      break;
-    case JobKind::RadioBrowser:
-      success = downloadRadioBrowserLogo(job.url, job.homepage, job.source,
-                                         imagePath) &&
-                makeThumbnail(imagePath, job.source, thumbnail);
-      if (success) compactCache(imagePath, thumbnail);
-      break;
-    case JobKind::AlbumCover: {
-      success = downloadAlbumCover(job.url, job.source, imagePath, thumbnail,
-                                   job.conservativeAlbumDownload);
-      if (success) compactCache(imagePath, thumbnail);
-      break;
+  gArtworkTaskSelectionId = job.selectionId;
+  if (!artworkNetworkShouldAbort()) {
+    switch (job.kind) {
+      case JobKind::Remote:
+        success = downloadRemote(job.url, job.source, imagePath) &&
+                  makeThumbnail(imagePath, job.source, thumbnail);
+        if (success) compactCache(imagePath, thumbnail);
+        break;
+      case JobKind::Embedded:
+        success =
+            downloadEmbedded(job.url, job.segments, job.source, imagePath) &&
+            makeThumbnail(imagePath, job.source, thumbnail);
+        if (success) compactCache(imagePath, thumbnail);
+        break;
+      case JobKind::Thumbnail:
+        success = makeThumbnail(job.localPath, job.source, thumbnail);
+        break;
+      case JobKind::BrowserImport:
+        imagePath = job.localPath;
+        success = makeThumbnail(imagePath, job.source, thumbnail);
+        if (success) compactCache(imagePath, thumbnail);
+        break;
+      case JobKind::RadioBrowser:
+        success = downloadRadioBrowserLogo(job.url, job.homepage, job.source,
+                                           imagePath) &&
+                  makeThumbnail(imagePath, job.source, thumbnail);
+        if (success) compactCache(imagePath, thumbnail);
+        break;
+      case JobKind::AlbumCover:
+        success = downloadAlbumCover(job.url, job.source, imagePath, thumbnail,
+                                     job.conservativeAlbumDownload);
+        if (success) compactCache(imagePath, thumbnail);
+        break;
     }
   }
+  gArtworkTaskSelectionId = 0;
   finishJob(job.source, success ? thumbnail : String(), success,
             job.selectionId);
 }
@@ -2386,6 +2401,13 @@ bool LogoManager::downloadAttempt(const String& fetchUrl, const String& key,
     return false;
   }
   NetworkClient* stream = http.getStreamPtr();
+  if (!stream) {
+    Serial.printf("[logo] kep stream hiba: %s\n", fetchUrl.c_str());
+    output.close();
+    http.end();
+    LittleFS.remove(temporary);
+    return false;
+  }
   uint8_t buffer[1024];
   size_t written = 0;
   uint32_t lastReadAt = millis();
@@ -2449,6 +2471,7 @@ bool LogoManager::downloadAttempt(const String& fetchUrl, const String& key,
 bool LogoManager::appendHttpRange(const String& url, uint32_t offset,
                                   uint32_t length, File& output) {
   if (!length || length > kMaximumArtworkBytes) return false;
+  if (artworkNetworkShouldAbort()) return false;
 #if DISPLAY_PROFILE_AXS15231B
   if (url.startsWith("https://")) {
     const size_t freeInternalHeap =
@@ -2486,15 +2509,24 @@ bool LogoManager::appendHttpRange(const String& url, uint32_t offset,
   http.addHeader("Range", "bytes=" + String(offset) + "-" +
                               String(offset + length - 1));
   const int code = http.GET();
+  if (artworkNetworkShouldAbort()) {
+    http.end();
+    return false;
+  }
   if (code != HTTP_CODE_PARTIAL_CONTENT) {
     http.end();
     return false;
   }
   NetworkClient* stream = http.getStreamPtr();
+  if (!stream) {
+    http.end();
+    return false;
+  }
   uint8_t buffer[1024];
   uint32_t remaining = length;
   uint32_t lastReadAt = millis();
   while ((http.connected() || stream->available()) && remaining) {
+    if (artworkNetworkShouldAbort()) break;
     const size_t available = stream->available();
     if (!available) {
       if (millis() - lastReadAt > kReadIdleTimeoutMs) break;
