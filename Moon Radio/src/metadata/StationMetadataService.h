@@ -16,6 +16,7 @@ class StationMetadataService {
   void loop(bool wifiConnected, bool playbackRunning,
             size_t bufferFilledBytes);
   String title() const;
+  bool busy() const;
 
  private:
   static void taskEntry(void* parameter);

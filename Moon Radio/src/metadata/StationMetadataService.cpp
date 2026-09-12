@@ -2,6 +2,7 @@
 
 #include <HTTPClient.h>
 #include <NetworkClientSecure.h>
+#include <esp_heap_caps.h>
 
 namespace {
 
@@ -16,6 +17,10 @@ constexpr uint32_t kPollIntervalMs = 15000;
 constexpr uint32_t kRetryIntervalMs = 15000;
 constexpr uint32_t kReadTimeoutMs = 7000;
 constexpr size_t kHealthyBufferBytes = 64 * 1024;
+// A TLS-kapcsolat sok átmeneti belső RAM-ot használ. Ha ez nincs meg, a
+// metaadat csak később frissülhet; a lejátszásnak viszont marad tartaléka.
+constexpr uint32_t kMetadataTaskStackBytes = 16 * 1024;
+constexpr size_t kMinimumMetadataTaskInternalHeap = 40 * 1024;
 
 bool readNext(HTTPClient& http, NetworkClient& stream, int& value,
               uint32_t deadline) {
@@ -172,8 +177,19 @@ void StationMetadataService::loop(bool wifiConnected, bool playbackRunning,
   }
   if (!start) return;
 
-  if (xTaskCreatePinnedToCore(taskEntry, "station-meta", 8192, this, 0,
-                              nullptr, 0) != pdPASS) {
+  const size_t internalHeap =
+      heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  if (internalHeap < kMinimumMetadataTaskInternalHeap) {
+    if (xSemaphoreTake(mutex_, pdMS_TO_TICKS(30))) {
+      taskRunning_ = false;
+      xSemaphoreGive(mutex_);
+    }
+    return;
+  }
+
+  if (xTaskCreatePinnedToCore(taskEntry, "station-meta",
+                              kMetadataTaskStackBytes, this, 0, nullptr,
+                              0) != pdPASS) {
     if (xSemaphoreTake(mutex_, pdMS_TO_TICKS(30))) {
       taskRunning_ = false;
       xSemaphoreGive(mutex_);
@@ -186,6 +202,15 @@ String StationMetadataService::title() const {
   String result;
   if (mutex_ && xSemaphoreTake(mutex_, pdMS_TO_TICKS(20))) {
     result = title_;
+    xSemaphoreGive(mutex_);
+  }
+  return result;
+}
+
+bool StationMetadataService::busy() const {
+  bool result = false;
+  if (mutex_ && xSemaphoreTake(mutex_, pdMS_TO_TICKS(5))) {
+    result = taskRunning_;
     xSemaphoreGive(mutex_);
   }
   return result;
