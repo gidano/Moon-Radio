@@ -868,13 +868,23 @@ bool RadioController::reloadStations() {
 bool RadioController::enterFsMaintenance() {
   if (!fsMaintenance_) {
     fsMaintenance_ = true;
+    fsMaintenanceLogged_ = false;
+    fsMaintenanceBusyLogged_ = false;
     audio_.setVisualizationEnabled(false);
     audio_.stop();
     display_.showMaintenance();
   }
   const bool artworkIdle = logoManager_.enterMaintenance();
-  Serial.printf("[fs] Wi-Fi karbantartasi mod%s\n",
-                artworkIdle ? "" : " (logo feladat meg fut)");
+  if (artworkIdle) {
+    if (!fsMaintenanceLogged_) {
+      Serial.println("[fs] Wi-Fi karbantartasi mod");
+      fsMaintenanceLogged_ = true;
+    }
+  } else if (!fsMaintenanceBusyLogged_) {
+    Serial.printf("[fs] Wi-Fi karbantartasi mod%s\n",
+                  " (logo feladat meg fut)");
+    fsMaintenanceBusyLogged_ = true;
+  }
   return artworkIdle;
 }
 

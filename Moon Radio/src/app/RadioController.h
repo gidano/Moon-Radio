@@ -173,6 +173,8 @@ class RadioController {
   uint32_t volumeChangedAt_{0};
   bool volumeSavePending_{false};
   bool fsMaintenance_{false};
+  bool fsMaintenanceLogged_{false};
+  bool fsMaintenanceBusyLogged_{false};
   bool wifiWasConnected_{false};
   bool initialized_{false};
   bool connectRetryPending_{false};
