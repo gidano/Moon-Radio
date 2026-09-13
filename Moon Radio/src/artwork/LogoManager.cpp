@@ -119,6 +119,8 @@ constexpr size_t kMinimumArtworkSecureFetchBlock = 7 * 1024;
 #if DISPLAY_PROFILE_AXS15231B
 constexpr size_t kMinimumAxsPlainTextFetchInternalHeap = 14 * 1024;
 constexpr size_t kMinimumAxsPlainTextFetchBlock = 6 * 1024;
+constexpr size_t kMinimumAxsSecureTextFetchInternalHeap = 18 * 1024;
+constexpr size_t kMinimumAxsSecureTextFetchBlock = 9 * 1024;
 constexpr size_t kMinimumAxsSecureFetchInternalHeap = 21 * 1024;
 constexpr size_t kMinimumAxsSecureFetchBlock = 9 * 1024;
 constexpr size_t kMinimumAxsLowBitrateAlbumCoverBuffer = 24 * 1024;
@@ -585,9 +587,9 @@ bool fetchText(const String& fetchUrl, PsramText& body) {
   constexpr uint32_t kTextReadIdleTimeoutMs = 4500;
   const bool secureFetch = fetchUrl.startsWith("https://");
 #if DISPLAY_PROFILE_AXS15231B
-  const size_t requiredHeap = secureFetch ? kMinimumAxsSecureFetchInternalHeap
+  const size_t requiredHeap = secureFetch ? kMinimumAxsSecureTextFetchInternalHeap
                                           : kMinimumAxsPlainTextFetchInternalHeap;
-  const size_t requiredBlock = secureFetch ? kMinimumAxsSecureFetchBlock
+  const size_t requiredBlock = secureFetch ? kMinimumAxsSecureTextFetchBlock
                                            : kMinimumAxsPlainTextFetchBlock;
 #else
   const size_t requiredHeap = kMinimumTextFetchInternalHeap;
