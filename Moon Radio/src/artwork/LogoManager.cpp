@@ -63,7 +63,7 @@ constexpr uint32_t kJobBusyLogMs = 7000;
 #if DISPLAY_PROFILE_AXS15231B
 constexpr uint32_t kArtworkTaskStackBytes = 16 * 1024;
 #else
-constexpr uint32_t kArtworkTaskStackBytes = 22 * 1024;
+constexpr uint32_t kArtworkTaskStackBytes = 28 * 1024;
 #endif
 constexpr size_t kMinimumLogoNetworkBuffer = 192 * 1024;
 constexpr size_t kMinimumConfiguredLogoBuffer = 128 * 1024;
@@ -96,9 +96,13 @@ constexpr uint32_t kOpportunisticAlbumBufferStabilizationMs = 750;
 constexpr uint32_t kAlbumNetworkAbortRetryMs = 15000;
 constexpr uint32_t kMaximumAlbumNetworkRetryMs = 60000;
 constexpr size_t kMinimumAlbumInternalHeap =
-    kArtworkTaskStackBytes + 20 * 1024;
+    kArtworkTaskStackBytes + 16 * 1024;
 constexpr uint32_t kReadIdleTimeoutMs = 3500;
-constexpr size_t kMinimumTextFetchInternalHeap = 20 * 1024;
+// Az API-keresés válasza kicsi, a nagyobb memóriaterhelés csak a tényleges
+// kép letöltésekor/dekódolásakor jön. A borítótask nagyobb stackje mellett
+// gyenge pufferű adóknál 17--18 KiB szabad belső heap a jellemző; ezt még
+// engedjük próbálkozni, a kép-letöltés saját kapuja utána külön véd.
+constexpr size_t kMinimumTextFetchInternalHeap = 16 * 1024;
 constexpr size_t kMinimumTextFetchBlock = 7 * 1024;
 constexpr size_t kMinimumTextReadInternalHeap = 12 * 1024;
 // A teljes kép-letöltés (főleg TLS esetén) több belső munkaterületet használ,
@@ -110,7 +114,7 @@ constexpr size_t kMinimumTextReadInternalHeap = 12 * 1024;
 // változatlanul elsőbbséget élvez.
 constexpr size_t kMinimumArtworkPlainFetchInternalHeap = 16 * 1024;
 constexpr size_t kMinimumArtworkPlainFetchBlock = 6 * 1024;
-constexpr size_t kMinimumArtworkSecureFetchInternalHeap = 20 * 1024;
+constexpr size_t kMinimumArtworkSecureFetchInternalHeap = 16 * 1024;
 constexpr size_t kMinimumArtworkSecureFetchBlock = 7 * 1024;
 #if DISPLAY_PROFILE_AXS15231B
 constexpr size_t kMinimumAxsPlainTextFetchInternalHeap = 14 * 1024;
@@ -615,42 +619,47 @@ bool fetchText(const String& fetchUrl, PsramText& body) {
                   static_cast<unsigned>(gArtworkBufferFilledBytes));
     return false;
   }
+  std::unique_ptr<NetworkClient> plainClient;
   std::unique_ptr<NetworkClientSecure> secureClient;
-  NetworkClient plainClient;
-  NetworkClient* client = &plainClient;
+  NetworkClient* client = nullptr;
   if (secureFetch) {
     secureClient.reset(new (std::nothrow) NetworkClientSecure());
     if (!secureClient) return false;
     secureClient->setInsecure();
     client = secureClient.get();
+  } else {
+    plainClient.reset(new (std::nothrow) NetworkClient());
+    if (!plainClient) return false;
+    client = plainClient.get();
   }
-  HTTPClient http;
-  http.setConnectTimeout(6000);
-  http.setTimeout(8000);
-  http.setUserAgent("LVGL-Radio/1.0 ESP32");
-  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  if (!http.begin(*client, fetchUrl)) return false;
+  std::unique_ptr<HTTPClient> http(new (std::nothrow) HTTPClient());
+  if (!http) return false;
+  http->setConnectTimeout(6000);
+  http->setTimeout(8000);
+  http->setUserAgent("LVGL-Radio/1.0 ESP32");
+  http->setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  if (!http->begin(*client, fetchUrl)) return false;
   Serial.printf("[cover] HTTP keresés: %s\n", fetchUrl.c_str());
-  const int code = http.GET();
+  const int code = http->GET();
   if (artworkNetworkShouldAbort()) {
     gAlbumNetworkAborted = true;
     gAlbumResourceDeferred = true;
     Serial.printf("[cover] API keresés megszakítva: puffer %u%% %u byte\n",
                   static_cast<unsigned>(gArtworkBufferPercent),
                   static_cast<unsigned>(gArtworkBufferFilledBytes));
-    http.end();
+    http->end();
     return false;
   }
   if (code != HTTP_CODE_OK) {
     Serial.printf("[cover] HTTP hiba %d: %s\n", code, fetchUrl.c_str());
-    http.end();
+    http->end();
     return false;
   }
-  const int declaredLength = http.getSize();
+  const int declaredLength = http->getSize();
   if (declaredLength > 0 &&
       static_cast<size_t>(declaredLength) > kMaximumTextResponseBytes) {
     Serial.printf("[cover] tul nagy API valasz: %d byte\n", declaredLength);
-    http.end();
+    http->end();
     return false;
   }
 
@@ -659,19 +668,19 @@ bool fetchText(const String& fetchUrl, PsramText& body) {
       declaredLength > 0 ? min<size_t>(declaredLength, 4096) : 2048;
   if (!body.reserve(reserveBytes)) {
     Serial.println("[cover] API valasz buffer foglalasi hiba");
-    http.end();
+    http->end();
     return false;
   }
-  NetworkClient* stream = http.getStreamPtr();
+  NetworkClient* stream = http->getStreamPtr();
   if (!stream) {
     Serial.println("[cover] API valasz stream hiba");
-    http.end();
+    http->end();
     return false;
   }
   uint8_t buffer[512];
   size_t receivedTotal = 0;
   uint32_t lastReadAt = millis();
-  while ((http.connected() || stream->available()) &&
+  while ((http->connected() || stream->available()) &&
          (declaredLength < 0 ||
           receivedTotal < static_cast<size_t>(declaredLength))) {
     if (artworkNetworkShouldAbort()) {
@@ -725,7 +734,7 @@ bool fetchText(const String& fetchUrl, PsramText& body) {
     lastReadAt = millis();
     vTaskDelay(pdMS_TO_TICKS(artworkNetworkDelayMs()));
   }
-  http.end();
+  http->end();
   if (declaredLength > 0 &&
       receivedTotal != static_cast<size_t>(declaredLength)) {
     Serial.printf("[cover] rovid API valasz: %u/%d byte\n",
@@ -2352,34 +2361,39 @@ bool LogoManager::downloadAttempt(const String& fetchUrl, const String& key,
                   static_cast<unsigned>(gArtworkBufferFilledBytes));
     return false;
   }
+  std::unique_ptr<NetworkClient> plainClient;
   std::unique_ptr<NetworkClientSecure> secureClient;
-  NetworkClient plainClient;
-  NetworkClient* client = &plainClient;
+  NetworkClient* client = nullptr;
   if (secureFetch) {
     secureClient.reset(new (std::nothrow) NetworkClientSecure());
     if (!secureClient) return false;
     secureClient->setInsecure();
     client = secureClient.get();
+  } else {
+    plainClient.reset(new (std::nothrow) NetworkClient());
+    if (!plainClient) return false;
+    client = plainClient.get();
   }
-  HTTPClient http;
-  http.setConnectTimeout(4000);
-  http.setTimeout(6000);
-  http.setUserAgent("LVGL-Radio/1.0 ESP32");
-  http.addHeader("Accept", "image/jpeg,image/png,image/bmp,*/*;q=0.5");
-  http.addHeader("Referer", "https://www.radio.pl/");
-  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  if (!http.begin(*client, fetchUrl)) return false;
-  const int code = http.GET();
+  std::unique_ptr<HTTPClient> http(new (std::nothrow) HTTPClient());
+  if (!http) return false;
+  http->setConnectTimeout(4000);
+  http->setTimeout(6000);
+  http->setUserAgent("LVGL-Radio/1.0 ESP32");
+  http->addHeader("Accept", "image/jpeg,image/png,image/bmp,*/*;q=0.5");
+  http->addHeader("Referer", "https://www.radio.pl/");
+  http->setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  if (!http->begin(*client, fetchUrl)) return false;
+  const int code = http->GET();
   if (code != HTTP_CODE_OK) {
     Serial.printf("[logo] HTTP hiba %d: %s\n", code, fetchUrl.c_str());
-    http.end();
+    http->end();
     return false;
   }
-  const int declaredLength = http.getSize();
+  const int declaredLength = http->getSize();
   if (declaredLength == 0 ||
       (declaredLength > 0 &&
        static_cast<size_t>(declaredLength) > kMaximumArtworkBytes)) {
-    http.end();
+    http->end();
     return false;
   }
   const size_t expectedBytes =
@@ -2390,28 +2404,28 @@ bool LogoManager::downloadAttempt(const String& fetchUrl, const String& key,
     Serial.printf("[logo] nincs eleg LittleFS hely: szabad=%u kell=%u\n",
                   static_cast<unsigned>(littleFsFreeBytes()),
                   static_cast<unsigned>(expectedBytes));
-    http.end();
+    http->end();
     return false;
   }
   const String temporary = cacheStem(key) + ".tmp";
   if (LittleFS.exists(temporary)) LittleFS.remove(temporary);
   File output = LittleFS.open(temporary, FILE_WRITE);
   if (!output) {
-    http.end();
+    http->end();
     return false;
   }
-  NetworkClient* stream = http.getStreamPtr();
+  NetworkClient* stream = http->getStreamPtr();
   if (!stream) {
     Serial.printf("[logo] kep stream hiba: %s\n", fetchUrl.c_str());
     output.close();
-    http.end();
+    http->end();
     LittleFS.remove(temporary);
     return false;
   }
   uint8_t buffer[1024];
   size_t written = 0;
   uint32_t lastReadAt = millis();
-  while ((http.connected() || stream->available()) &&
+  while ((http->connected() || stream->available()) &&
          (declaredLength < 0 ||
           written < static_cast<size_t>(declaredLength))) {
     if (artworkNetworkShouldAbort()) {
@@ -2443,7 +2457,7 @@ bool LogoManager::downloadAttempt(const String& fetchUrl, const String& key,
   }
   output.flush();
   output.close();
-  http.end();
+  http->end();
   if (!written || written > kMaximumArtworkBytes ||
       (declaredLength > 0 && written != static_cast<size_t>(declaredLength))) {
     Serial.printf("[logo] incomplet kep: %u byte, vart=%d: %s\n",
@@ -2492,40 +2506,45 @@ bool LogoManager::appendHttpRange(const String& url, uint32_t offset,
   }
 #endif
   const bool secureFetch = url.startsWith("https://");
+  std::unique_ptr<NetworkClient> plainClient;
   std::unique_ptr<NetworkClientSecure> secureClient;
-  NetworkClient plainClient;
-  NetworkClient* client = &plainClient;
+  NetworkClient* client = nullptr;
   if (secureFetch) {
     secureClient.reset(new (std::nothrow) NetworkClientSecure());
     if (!secureClient) return false;
     secureClient->setInsecure();
     client = secureClient.get();
+  } else {
+    plainClient.reset(new (std::nothrow) NetworkClient());
+    if (!plainClient) return false;
+    client = plainClient.get();
   }
-  HTTPClient http;
-  http.setConnectTimeout(4000);
-  http.setTimeout(5000);
-  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  if (!http.begin(*client, url)) return false;
-  http.addHeader("Range", "bytes=" + String(offset) + "-" +
-                              String(offset + length - 1));
-  const int code = http.GET();
+  std::unique_ptr<HTTPClient> http(new (std::nothrow) HTTPClient());
+  if (!http) return false;
+  http->setConnectTimeout(4000);
+  http->setTimeout(5000);
+  http->setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  if (!http->begin(*client, url)) return false;
+  http->addHeader("Range", "bytes=" + String(offset) + "-" +
+                               String(offset + length - 1));
+  const int code = http->GET();
   if (artworkNetworkShouldAbort()) {
-    http.end();
+    http->end();
     return false;
   }
   if (code != HTTP_CODE_PARTIAL_CONTENT) {
-    http.end();
+    http->end();
     return false;
   }
-  NetworkClient* stream = http.getStreamPtr();
+  NetworkClient* stream = http->getStreamPtr();
   if (!stream) {
-    http.end();
+    http->end();
     return false;
   }
   uint8_t buffer[1024];
   uint32_t remaining = length;
   uint32_t lastReadAt = millis();
-  while ((http.connected() || stream->available()) && remaining) {
+  while ((http->connected() || stream->available()) && remaining) {
     if (artworkNetworkShouldAbort()) break;
     const size_t available = stream->available();
     if (!available) {
@@ -2543,7 +2562,7 @@ bool LogoManager::appendHttpRange(const String& url, uint32_t offset,
     lastReadAt = millis();
     vTaskDelay(1);
   }
-  http.end();
+  http->end();
   return remaining == 0;
 }
 
