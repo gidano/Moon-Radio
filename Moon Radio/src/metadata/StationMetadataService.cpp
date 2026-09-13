@@ -3,6 +3,8 @@
 #include <HTTPClient.h>
 #include <NetworkClientSecure.h>
 #include <esp_heap_caps.h>
+#include <memory>
+#include <new>
 
 namespace {
 
@@ -23,7 +25,9 @@ constexpr size_t kHealthyBufferBytes = 64 * 1024;
 // A TLS-kapcsolat sok átmeneti belső RAM-ot használ. Ha ez nincs meg, a
 // metaadat csak később frissülhet; a lejátszásnak viszont marad tartaléka.
 constexpr uint32_t kMetadataTaskStackBytes = 16 * 1024;
-constexpr size_t kMinimumMetadataTaskInternalHeap = 40 * 1024;
+constexpr size_t kMinimumMetadataTaskInternalHeap = 36 * 1024;
+constexpr size_t kMinimumMetadataFetchInternalHeap = 16 * 1024;
+constexpr size_t kMinimumMetadataFetchBlock = 7 * 1024;
 
 bool readNext(HTTPClient& http, NetworkClient& stream, int& value,
               uint32_t deadline) {
@@ -184,6 +188,9 @@ void StationMetadataService::loop(bool wifiConnected, bool playbackRunning,
   const size_t internalHeap =
       heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
   if (internalHeap < kMinimumMetadataTaskInternalHeap) {
+    Serial.printf("[metadata] MyOnlineRadio var: heap=%u/%u byte\n",
+                  static_cast<unsigned>(internalHeap),
+                  static_cast<unsigned>(kMinimumMetadataTaskInternalHeap));
     if (xSemaphoreTake(mutex_, pdMS_TO_TICKS(30))) {
       taskRunning_ = false;
       xSemaphoreGive(mutex_);
@@ -273,9 +280,26 @@ bool StationMetadataService::fetchRetroTitle(String& title) {
 bool StationMetadataService::fetchMyOnlineRadioTitle(const char* pageUrl,
                                                      const char* stationToken,
                                                      String& title) {
-  NetworkClientSecure client;
-  client.setInsecure();
-  client.setHandshakeTimeout(7);
+  const size_t freeInternalHeap =
+      heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  const size_t largestInternalBlock =
+      heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  if (freeInternalHeap < kMinimumMetadataFetchInternalHeap ||
+      largestInternalBlock < kMinimumMetadataFetchBlock) {
+    Serial.printf(
+        "[metadata] MyOnlineRadio kihagyva: keves belso heap %u/%u byte, blokk=%u/%u\n",
+        static_cast<unsigned>(freeInternalHeap),
+        static_cast<unsigned>(kMinimumMetadataFetchInternalHeap),
+        static_cast<unsigned>(largestInternalBlock),
+        static_cast<unsigned>(kMinimumMetadataFetchBlock));
+    return false;
+  }
+
+  std::unique_ptr<NetworkClientSecure> client(
+      new (std::nothrow) NetworkClientSecure());
+  if (!client) return false;
+  client->setInsecure();
+  client->setHandshakeTimeout(7);
 
   // A weboldal AJAX-kérése is minden lekéréshez egyedi paramétert használ.
   // Így nem kaphatjuk vissza a szerver/CDN korábban gyorsítótárazott válaszát.
@@ -283,32 +307,37 @@ bool StationMetadataService::fetchMyOnlineRadioTitle(const char* pageUrl,
   requestUrl += "?_=";
   requestUrl += String(millis());
 
-  HTTPClient http;
-  http.setConnectTimeout(4000);
-  http.setTimeout(kReadTimeoutMs);
-  http.setUserAgent("LVGL-Radio/1.0 ESP32");
-  if (!http.begin(client, requestUrl)) return false;
-  http.addHeader("Accept", "application/json");
-  http.addHeader("Accept-Encoding", "identity");
+  std::unique_ptr<HTTPClient> http(new (std::nothrow) HTTPClient());
+  if (!http) return false;
+  http->setConnectTimeout(4000);
+  http->setTimeout(kReadTimeoutMs);
+  http->setUserAgent("LVGL-Radio/1.0 ESP32");
+  if (!http->begin(*client, requestUrl)) return false;
+  http->addHeader("Accept", "application/json");
+  http->addHeader("Accept-Encoding", "identity");
   // A végpont Referer nélkül 200 OK mellett üres választ küld.
-  http.addHeader("Referer", pageUrl);
-  http.addHeader("X-Requested-With", "XMLHttpRequest");
+  http->addHeader("Referer", pageUrl);
+  http->addHeader("X-Requested-With", "XMLHttpRequest");
 
-  const int code = http.GET();
+  const int code = http->GET();
   if (code != HTTP_CODE_OK) {
     Serial.printf("[metadata] MyOnlineRadio HTTP %d\n", code);
-    http.end();
+    http->end();
     return false;
   }
 
-  NetworkClient* stream = http.getStreamPtr();
+  NetworkClient* stream = http->getStreamPtr();
+  if (!stream) {
+    http->end();
+    return false;
+  }
   const uint32_t deadline = millis() + kReadTimeoutMs;
-  bool ok = findToken(http, *stream, stationToken, deadline);
-  if (ok) ok = findToken(http, *stream, "\"title\"", deadline, 256);
-  if (ok) ok = findToken(http, *stream, ":", deadline, 32);
-  if (ok) ok = findToken(http, *stream, "\"", deadline, 32);
-  if (ok) ok = readJsonString(http, *stream, title, deadline);
-  http.end();
+  bool ok = findToken(*http, *stream, stationToken, deadline);
+  if (ok) ok = findToken(*http, *stream, "\"title\"", deadline, 256);
+  if (ok) ok = findToken(*http, *stream, ":", deadline, 32);
+  if (ok) ok = findToken(*http, *stream, "\"", deadline, 32);
+  if (ok) ok = readJsonString(*http, *stream, title, deadline);
+  http->end();
   return ok;
 }
 
