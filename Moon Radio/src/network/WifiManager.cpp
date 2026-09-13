@@ -13,6 +13,19 @@ constexpr uint32_t kReconnectTimeoutMs = 8000;
 constexpr uint32_t kReconnectIntervalMs = 15000;
 constexpr uint32_t kRuntimeApFallbackMs = 5UL * 60UL * 1000UL;
 
+bool wifiDriverStarted() {
+  return WiFi.getMode() != WIFI_MODE_NULL;
+}
+
+void safeStaDisconnect(bool wifioff = false, bool eraseap = false) {
+  if (wifiDriverStarted()) WiFi.disconnect(wifioff, eraseap);
+}
+
+void safeSoftApDisconnect(bool wifioff = false) {
+  const wifi_mode_t mode = WiFi.getMode();
+  if (mode == WIFI_AP || mode == WIFI_AP_STA) WiFi.softAPdisconnect(wifioff);
+}
+
 bool readNonEmptyLine(File& file, String& result) {
   while (file.available()) {
     result = file.readStringUntil('\n');
@@ -85,9 +98,9 @@ bool WifiManager::tryConnect(const Credential& credential,
                              uint32_t timeoutMs) {
   const bool keepAccessPoint = accessPointMode_;
   if (!keepAccessPoint) {
-    WiFi.softAPdisconnect(true);
+    safeSoftApDisconnect(true);
   }
-  WiFi.disconnect(false, false);
+  safeStaDisconnect(false, false);
   WiFi.mode(keepAccessPoint ? WIFI_AP_STA : WIFI_STA);
   WiFi.setSleep(false);
   WiFi.setAutoReconnect(true);
@@ -114,7 +127,7 @@ bool WifiManager::tryConnect(const Credential& credential,
       WiFi.setSleep(false);
       WiFi.setAutoReconnect(true);
       if (keepAccessPoint) {
-        WiFi.softAPdisconnect(true);
+        safeSoftApDisconnect(true);
         WiFi.mode(WIFI_STA);
       }
       accessPointMode_ = false;
@@ -125,7 +138,7 @@ bool WifiManager::tryConnect(const Credential& credential,
     }
     delay(100);
   }
-  WiFi.disconnect();
+  safeStaDisconnect();
   if (keepAccessPoint) {
     WiFi.mode(WIFI_AP_STA);
     if (WiFi.softAPIP() == IPAddress(static_cast<uint32_t>(0))) {
@@ -137,7 +150,7 @@ bool WifiManager::tryConnect(const Credential& credential,
 }
 
 void WifiManager::startAccessPoint() {
-  WiFi.disconnect(true, false);
+  safeStaDisconnect(true, false);
   WiFi.mode(credentials_.empty() ? WIFI_AP : WIFI_AP_STA);
   WiFi.softAP(kAccessPointName);
   accessPointMode_ = true;
@@ -173,7 +186,7 @@ void WifiManager::loop() {
   if (WiFi.status() == WL_CONNECTED) {
     disconnectedSince_ = 0;
     if (accessPointMode_) {
-      WiFi.softAPdisconnect(true);
+      safeSoftApDisconnect(true);
       WiFi.mode(WIFI_STA);
       accessPointMode_ = false;
     }
