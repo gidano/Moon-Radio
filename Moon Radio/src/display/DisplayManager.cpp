@@ -150,12 +150,7 @@ bool DisplayManager::begin(const NowPlayingActions& actions) {
 #endif
 
   presets_.begin();
-  // A bootlogo ugyanabból a helyi .sr565 formátumból töltődik, mint a
-  // választható háttérképek.  AXS-en ez a korábbi szöveges első képkockát
-  // váltja ki, más kijelzőn pedig ugyanazt a 480x320-as képet rajzolja ki.
-  showBootLogo();
   screen_.create(fonts_, actions);
-  releaseBootLogo();
   configureScreenNativeHooks();
   screen_.setVisualizerMode(visualizerMode_);
   screen_.setHeaderIpVisible(headerIpVisible_);
@@ -163,9 +158,15 @@ bool DisplayManager::begin(const NowPlayingActions& actions) {
   screen_.setVolumeGraphicVisible(volumeGraphicVisible_);
   screen_.setBufferBarVisible(bufferBarVisible_);
   screen_.setDiagnosticsVisible(diagnosticsVisible_);
+  // A teljes rádióképernyő már elkészült a bootlogo alatt. Így Wi-Fi után
+  // az audio be tudja tölteni az induló tartalékot anélkül, hogy a panel
+  // inicializálási vagy AXS QSPI útját módosítanánk.
+  showBootLogo();
   previousTick_ = millis();
   return true;
 }
+
+void DisplayManager::finishStartupBootLogo() { releaseBootLogo(); }
 
 void DisplayManager::loop() {
   const uint32_t now = millis();
@@ -181,7 +182,9 @@ void DisplayManager::loop() {
     }
 #endif
   }
-  if (screenMode_ == ScreenMode::Normal) {
+  // The retained bootlogo is a real startup phase, not merely a picture:
+  // avoid background/VU/UI work until the stream has received its head start.
+  if (screenMode_ == ScreenMode::Normal && !bootLogoOverlay_) {
     screen_.loop(now);
   }
 
@@ -212,10 +215,7 @@ void DisplayManager::showBootLogo() {
 
   if (!lvDisplay_) return;
   lv_obj_t* screen = lv_screen_active();
-  lv_obj_clean(screen);
-  lv_obj_set_style_bg_color(screen, lv_color_hex(0x050914), 0);
-  lv_obj_set_style_text_color(screen, lv_color_hex(0xF1F5F9), 0);
-  lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
+  if (bootLogoOverlay_) releaseBootLogo();
 
   File file = LittleFS.open(kBootLogoPath, FILE_READ);
   uint8_t header[8]{};
@@ -249,6 +249,8 @@ void DisplayManager::showBootLogo() {
     lv_image_set_src(bootImage, &bootLogoDescriptor_);
     lv_obj_set_pos(bootImage, 0, 0);
     lv_obj_clear_flag(bootImage, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_move_foreground(bootImage);
+    bootLogoOverlay_ = bootImage;
   } else {
     // A normál kijelző még akkor is használható marad, ha egy hiányos
     // fájlrendszer-feltöltésből kimarad a bootlogo.
@@ -264,6 +266,10 @@ void DisplayManager::showBootLogo() {
 }
 
 void DisplayManager::releaseBootLogo() {
+  if (bootLogoOverlay_) {
+    lv_obj_delete(bootLogoOverlay_);
+    bootLogoOverlay_ = nullptr;
+  }
   if (bootLogoPixels_) {
     free(bootLogoPixels_);
     bootLogoPixels_ = nullptr;

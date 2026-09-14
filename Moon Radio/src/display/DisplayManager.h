@@ -22,6 +22,9 @@ class DisplayManager {
   // before the AXS controller is allowed to turn its output on.
   void setStartupDisplayState(bool colorInverted, bool screenFlipped);
   bool begin(const NowPlayingActions& actions);
+  // The bootlogo remains above the completed radio UI while the first stream
+  // builds its startup reserve.  Removing it never changes the panel path.
+  void finishStartupBootLogo();
   void loop();
   void update(const AudioSnapshot& audio, const String& logoName,
               const String& wifiText, const String& ipText,
@@ -116,6 +119,7 @@ class DisplayManager {
   const uint16_t* nativeVuPixels_{nullptr};
   uint8_t* bootLogoPixels_{nullptr};
   lv_image_dsc_t bootLogoDescriptor_{};
+  lv_obj_t* bootLogoOverlay_{nullptr};
   uint32_t drawBufferPixels_{0};
   uint32_t previousTick_{0};
   uint32_t lastLvglRunAt_{0};
