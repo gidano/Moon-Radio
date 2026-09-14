@@ -20,6 +20,10 @@ class LogoManager {
   void setAlbumCoversEnabled(bool enabled);
   bool albumCoversEnabled() const;
   void setAlbumTitle(const String& combinedTitle);
+  // Lassú audióadatfolyam esetén az aktív és a következő borítóhálózati
+  // próbát röviden félreállítja; a normál puffer- és RAM-küszöböket nem
+  // változtatja meg.
+  void deferAlbumCoverSearch(uint32_t durationMs);
   void loop(bool playbackRunning, size_t bufferFilledBytes,
             const String& codec = "", uint32_t bitrateKbps = 0,
             uint8_t bufferPercent = 0);
@@ -38,7 +42,10 @@ class LogoManager {
     Thumbnail,
     BrowserImport,
     RadioBrowser,
-    AlbumCover
+    AlbumCover,
+    // The album artwork download and image conversion deliberately run in
+    // separate tasks.  TLS can then be released before stb expands the image.
+    AlbumCoverDecode
   };
 
   struct Job {
@@ -59,7 +66,7 @@ class LogoManager {
                 const std::vector<uint32_t>& segments = {});
   void executeJob(Job& job);
   void finishJob(const String& source, const String& path, bool success,
-                 uint32_t selectionId);
+                 uint32_t selectionId, bool needsThumbnail = false);
   void processResult();
   void refreshSelection();
 
@@ -81,7 +88,6 @@ class LogoManager {
   static bool downloadAlbumCover(const String& combinedTitle,
                                  const String& key,
                                  String& imagePath,
-                                 String& thumbnail,
                                  bool conservativeMode = false);
   static String resolveRelativeUrl(String value, const String& baseUrl);
   static bool downloadAttempt(const String& fetchUrl, const String& key,
@@ -126,6 +132,7 @@ class LogoManager {
   uint32_t albumStatusLoggedAt_{0};
   uint32_t albumRetryAfter_{0};
   uint32_t albumBufferStableAt_{0};
+  uint32_t albumNetworkPausedUntil_{0};
   uint8_t albumDeferredRetries_{0};
   String pendingAlbumPurgeKey_;
   String selectedSource_;
@@ -143,6 +150,7 @@ class LogoManager {
 
   bool resultReady_{false};
   bool resultSuccess_{false};
+  bool resultNeedsThumbnail_{false};
   String resultSource_;
   String resultPath_;
   uint32_t resultSelectionId_{0};

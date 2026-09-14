@@ -62,8 +62,13 @@ constexpr uint32_t kMaximumAlbumCoverWaitMs = 35000;
 constexpr uint32_t kJobBusyLogMs = 7000;
 #if DISPLAY_PROFILE_AXS15231B
 constexpr uint32_t kArtworkTaskStackBytes = 16 * 1024;
+constexpr uint32_t kArtworkNetworkTaskStackBytes = 16 * 1024;
 #else
 constexpr uint32_t kArtworkTaskStackBytes = 28 * 1024;
+// Cover lookup only needs strings, JSON and the HTTP client.  Keep its stack
+// smaller than the image conversion task so TLS does not take the last RAM
+// reserve away from the audio decoder.
+constexpr uint32_t kArtworkNetworkTaskStackBytes = 20 * 1024;
 #endif
 constexpr size_t kMinimumLogoNetworkBuffer = 192 * 1024;
 constexpr size_t kMinimumConfiguredLogoBuffer = 128 * 1024;
@@ -152,6 +157,10 @@ volatile uint32_t gArtworkBitrateKbps = 0;
 volatile size_t gArtworkAlbumAbortBufferBytes =
     kMinimumAlbumCoverAbortBuffer;
 volatile uint8_t gArtworkAlbumAbortBufferPercent = 0;
+// A vezérlő a dekóder "slow stream" jelzésére ezt az időablakot állítja be.
+// A borítófeladat minden hálózati olvasási körben ellenőrzi, ezért a futó
+// letöltés is gyorsan elengedi a Wi-Fi-t az audió számára.
+volatile uint32_t gArtworkAlbumNetworkPausedUntil = 0;
 // Egy állomásváltás közben a korábbi háttérfeladat már nem tölthet le adatot.
 // A két érték csak 32 bites, atomi olvasás/írásra használt generációszám.
 volatile uint32_t gArtworkSelectionId = 0;
@@ -300,10 +309,28 @@ uint32_t artworkNetworkDelayMs() {
   return 1;
 }
 
+bool artworkAlbumNetworkPaused() {
+  const uint32_t pausedUntil = gArtworkAlbumNetworkPausedUntil;
+  return pausedUntil && static_cast<int32_t>(millis() - pausedUntil) < 0;
+}
+
+void logArtworkNetworkAbort(const char* operation) {
+  if (gAlbumNetworkPoliteLevel && artworkAlbumNetworkPaused()) {
+    Serial.printf("[cover] %s megszakitva: lassu stream\n", operation);
+    return;
+  }
+  Serial.printf("[cover] %s megszakitva: puffer %u%% %u byte\n", operation,
+                static_cast<unsigned>(gArtworkBufferPercent),
+                static_cast<unsigned>(gArtworkBufferFilledBytes));
+}
+
 bool artworkNetworkShouldAbort() {
   if (gArtworkTaskSelectionId != 0 &&
       gArtworkTaskSelectionId != gArtworkSelectionId)
     return true;
+  // A szünet kizárólag az album-borítófeladatra vonatkozik. Az állomás helyi
+  // vagy távoli logójának feldolgozását nem akadályozhatja.
+  if (gAlbumNetworkPoliteLevel && artworkAlbumNetworkPaused()) return true;
   if (!gArtworkPlaybackRunning || !gAlbumNetworkPoliteLevel) return false;
   return gArtworkBufferFilledBytes > 0 &&
          ((gArtworkAlbumAbortBufferPercent > 0 &&
@@ -616,9 +643,7 @@ bool fetchText(const String& fetchUrl, PsramText& body) {
   if (artworkNetworkShouldAbort()) {
     gAlbumNetworkAborted = true;
     gAlbumResourceDeferred = true;
-    Serial.printf("[cover] API keresés megszakítva: puffer %u%% %u byte\n",
-                  static_cast<unsigned>(gArtworkBufferPercent),
-                  static_cast<unsigned>(gArtworkBufferFilledBytes));
+    logArtworkNetworkAbort("API kereses");
     return false;
   }
   std::unique_ptr<NetworkClient> plainClient;
@@ -646,9 +671,7 @@ bool fetchText(const String& fetchUrl, PsramText& body) {
   if (artworkNetworkShouldAbort()) {
     gAlbumNetworkAborted = true;
     gAlbumResourceDeferred = true;
-    Serial.printf("[cover] API keresés megszakítva: puffer %u%% %u byte\n",
-                  static_cast<unsigned>(gArtworkBufferPercent),
-                  static_cast<unsigned>(gArtworkBufferFilledBytes));
+    logArtworkNetworkAbort("API kereses");
     http->end();
     return false;
   }
@@ -688,9 +711,7 @@ bool fetchText(const String& fetchUrl, PsramText& body) {
     if (artworkNetworkShouldAbort()) {
       gAlbumNetworkAborted = true;
       gAlbumResourceDeferred = true;
-      Serial.printf("[cover] API keresés megszakítva: puffer %u%% %u byte\n",
-                    static_cast<unsigned>(gArtworkBufferPercent),
-                    static_cast<unsigned>(gArtworkBufferFilledBytes));
+      logArtworkNetworkAbort("API kereses");
       body.clear();
       break;
     }
@@ -1283,7 +1304,6 @@ bool LogoManager::resolveAlbumCoverUrl(const String& combinedTitle,
 bool LogoManager::downloadAlbumCover(const String& combinedTitle,
                                      const String& key,
                                      String& imagePath,
-                                     String& thumbnail,
                                      bool conservativeMode) {
   ScopedAlbumNetworkPoliteMode politeNetwork(conservativeMode ? 2 : 1);
   gAlbumNetworkAborted = false;
@@ -1302,10 +1322,8 @@ bool LogoManager::downloadAlbumCover(const String& combinedTitle,
     const bool downloaded = conservativeMode
                                 ? downloadAttempt(effectiveUrl, key, imagePath)
                                 : downloadRemote(effectiveUrl, key, imagePath);
-    const bool success =
-        downloaded && makeThumbnail(imagePath, key, thumbnail);
-    Serial.printf("[cover] jelolt %s\n", success ? "OK" : "nem jo");
-    return success;
+    Serial.printf("[cover] jelolt %s\n", downloaded ? "letoltve" : "nem jo");
+    return downloaded;
   };
 
   auto tryCandidates = [&](std::vector<String>& coverUrls) {
@@ -1409,6 +1427,8 @@ void LogoManager::selectStation(const String& configuredSource,
   albumStatusLoggedAt_ = 0;
   albumRetryAfter_ = 0;
   albumBufferStableAt_ = 0;
+  albumNetworkPausedUntil_ = 0;
+  gArtworkAlbumNetworkPausedUntil = 0;
   pendingAlbumPurgeKey_ = "";
   radioBrowserLoaded_ = false;
   radioBrowserKey_ = stationName_;
@@ -1494,6 +1514,24 @@ void LogoManager::setAlbumCoversEnabled(bool enabled) {
 
 bool LogoManager::albumCoversEnabled() const { return albumCoversEnabled_; }
 
+void LogoManager::deferAlbumCoverSearch(uint32_t durationMs) {
+  if (!durationMs) return;
+  const uint32_t now = millis();
+  const bool alreadyPaused =
+      albumNetworkPausedUntil_ &&
+      static_cast<int32_t>(now - albumNetworkPausedUntil_) < 0;
+  const uint32_t requestedUntil = now + durationMs;
+  if (!alreadyPaused ||
+      static_cast<int32_t>(requestedUntil - albumNetworkPausedUntil_) > 0) {
+    albumNetworkPausedUntil_ = requestedUntil;
+    gArtworkAlbumNetworkPausedUntil = requestedUntil;
+  }
+  if (!alreadyPaused) {
+    Serial.printf("[cover] lassu stream: borito kereses szunet %lu mp\n",
+                  static_cast<unsigned long>(durationMs / 1000));
+  }
+}
+
 void LogoManager::setAlbumTitle(const String& combinedTitle) {
 #if defined(USE_LASTFM_COVER) && defined(LASTFM_API_KEY)
   if (!albumCoversEnabled_) {
@@ -1568,6 +1606,11 @@ void LogoManager::loop(bool playbackRunning, size_t bufferFilledBytes,
   gArtworkBufferFilledBytes = bufferFilledBytes;
   gArtworkBufferPercent = bufferPercent;
   gArtworkBitrateKbps = bitrateKbps;
+  if (albumNetworkPausedUntil_ &&
+      static_cast<int32_t>(millis() - albumNetworkPausedUntil_) >= 0) {
+    albumNetworkPausedUntil_ = 0;
+    gArtworkAlbumNetworkPausedUntil = 0;
+  }
   processResult();
 
   if (currentPath_.isEmpty() || !LittleFS.exists(currentPath_)) {
@@ -1709,6 +1752,17 @@ void LogoManager::loop(bool playbackRunning, size_t bufferFilledBytes,
       return false;
     }
     albumRetryAfter_ = 0;
+    if (albumNetworkPausedUntil_ &&
+        static_cast<int32_t>(now - albumNetworkPausedUntil_) < 0) {
+      if (!albumStatusLoggedAt_ ||
+          now - albumStatusLoggedAt_ >= kAlbumStatusLogIntervalMs) {
+        Serial.printf("[cover] varakozas lassu stream utan: %lu mp\n",
+                      static_cast<unsigned long>(
+                          (albumNetworkPausedUntil_ - now + 999) / 1000));
+        albumStatusLoggedAt_ = now;
+      }
+      return false;
+    }
     if (now - albumRequestedAt_ < kArtworkDelayMs) {
       if (!albumStatusLoggedAt_ ||
           now - albumStatusLoggedAt_ >= kAlbumStatusLogIntervalMs) {
@@ -1986,9 +2040,15 @@ bool LogoManager::startJob(JobKind kind, const String& source,
     case JobKind::AlbumCover:
       kindName = "album borito";
       break;
+    case JobKind::AlbumCoverDecode:
+      kindName = "album borito feldolgozas";
+      break;
   }
+  const uint32_t taskStackBytes =
+      kind == JobKind::AlbumCover ? kArtworkNetworkTaskStackBytes
+                                  : kArtworkTaskStackBytes;
   const BaseType_t created = xTaskCreatePinnedToCore(
-      taskEntry, "logo", kArtworkTaskStackBytes, job, kArtworkTaskPriority,
+      taskEntry, "logo", taskStackBytes, job, kArtworkTaskPriority,
       &task_, kArtworkTaskCore);
   if (created != pdPASS) {
     task_ = nullptr;
@@ -2021,7 +2081,10 @@ void LogoManager::executeJob(Job& job) {
   bool success = false;
 
   gArtworkTaskSelectionId = job.selectionId;
-  if (!artworkNetworkShouldAbort()) {
+  // The second cover phase is local PSRAM/LittleFS work.  It must not be
+  // rejected by a transient audio-buffer rule after the network phase has
+  // already completed successfully.
+  if (job.kind == JobKind::AlbumCoverDecode || !artworkNetworkShouldAbort()) {
     switch (job.kind) {
       case JobKind::Remote:
         success = downloadRemote(job.url, job.source, imagePath) &&
@@ -2049,9 +2112,23 @@ void LogoManager::executeJob(Job& job) {
         if (success) compactCache(imagePath, thumbnail);
         break;
       case JobKind::AlbumCover:
-        success = downloadAlbumCover(job.url, job.source, imagePath, thumbnail,
+        success = downloadAlbumCover(job.url, job.source, imagePath,
                                      job.conservativeAlbumDownload);
+        // Do not decode while TLS and the network task stack are still alive.
+        // processResult() starts the conversion only after this task exits.
+        if (success) {
+          gArtworkTaskSelectionId = 0;
+          finishJob(job.source, imagePath, true, job.selectionId, true);
+          return;
+        }
+        break;
+      case JobKind::AlbumCoverDecode:
+        imagePath = job.localPath;
+        success = makeThumbnail(imagePath, job.source, thumbnail);
+        Serial.printf("[cover] jelolt %s\n", success ? "OK" : "nem jo");
         if (success) compactCache(imagePath, thumbnail);
+        else if (!imagePath.isEmpty() && LittleFS.exists(imagePath))
+          LittleFS.remove(imagePath);
         break;
     }
   }
@@ -2061,11 +2138,13 @@ void LogoManager::executeJob(Job& job) {
 }
 
 void LogoManager::finishJob(const String& source, const String& path,
-                            bool success, uint32_t selectionId) {
+                            bool success, uint32_t selectionId,
+                            bool needsThumbnail) {
   if (mutex_ && xSemaphoreTake(mutex_, portMAX_DELAY) == pdTRUE) {
     resultSource_ = source;
     resultPath_ = path;
     resultSuccess_ = success;
+    resultNeedsThumbnail_ = needsThumbnail;
     resultSelectionId_ = selectionId;
     resultReady_ = true;
     xSemaphoreGive(mutex_);
@@ -2082,11 +2161,13 @@ void LogoManager::processResult() {
   }
   const String source = resultSource_;
   const String path = resultPath_;
-  const bool success = resultSuccess_;
+  bool success = resultSuccess_;
+  const bool needsThumbnail = resultNeedsThumbnail_;
   const uint32_t resultSelectionId = resultSelectionId_;
   resultReady_ = false;
   resultSource_ = "";
   resultPath_ = "";
+  resultNeedsThumbnail_ = false;
   resultSelectionId_ = 0;
   task_ = nullptr;
   taskStartedAt_ = 0;
@@ -2114,6 +2195,16 @@ void LogoManager::processResult() {
       millis() - searchStartedAt_ >= kNoLogoSearchWindowMs) {
     searchFinished_ = true;
     return;
+  }
+
+  if (needsThumbnail) {
+    // The completed downloader task has released its TLS context and smaller
+    // stack by now.  Start the PSRAM-heavy conversion as a clean second phase.
+    if (success && startJob(JobKind::AlbumCoverDecode, source, "", path))
+      return;
+    if (success && !path.isEmpty() && LittleFS.exists(path))
+      LittleFS.remove(path);
+    success = false;
   }
 
   if (success) {
@@ -2358,9 +2449,7 @@ bool LogoManager::downloadAttempt(const String& fetchUrl, const String& key,
   if (artworkNetworkShouldAbort()) {
     gAlbumNetworkAborted = true;
     gAlbumResourceDeferred = true;
-    Serial.printf("[cover] kep letoltes nem indul: puffer %u%% %u byte\n",
-                  static_cast<unsigned>(gArtworkBufferPercent),
-                  static_cast<unsigned>(gArtworkBufferFilledBytes));
+    logArtworkNetworkAbort("kep letoltes");
     return false;
   }
   std::unique_ptr<NetworkClient> plainClient;
@@ -2433,9 +2522,7 @@ bool LogoManager::downloadAttempt(const String& fetchUrl, const String& key,
     if (artworkNetworkShouldAbort()) {
       gAlbumNetworkAborted = true;
       gAlbumResourceDeferred = true;
-      Serial.printf("[cover] kep letoltes megszakitva: puffer %u%% %u byte\n",
-                    static_cast<unsigned>(gArtworkBufferPercent),
-                    static_cast<unsigned>(gArtworkBufferFilledBytes));
+      logArtworkNetworkAbort("kep letoltes");
       break;
     }
     const size_t available = stream->available();
