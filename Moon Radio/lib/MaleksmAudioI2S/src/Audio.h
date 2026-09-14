@@ -376,6 +376,11 @@ class Audio {
         bool     VOLUME_CONTROL = true;        // true: volume and balance control is enabled
         float    VOL_FADING_SPEED = 50.0;      // mute, volume fading 1.0f (fast) ... 100.0f (slow)
         uint32_t BUFFER_TRESHOLD_HLS = 120000; // Level at which the HLS-TS stream starts and is reloaded
+        // Normal web streams traditionally start after two frames.  A value of
+        // zero keeps that original behaviour; applications may opt into an
+        // initial reserve with a bounded wait.
+        uint32_t BUFFER_TRESHOLD_WEBSTREAM = 0;
+        uint32_t BUFFER_TRESHOLD_WEBSTREAM_TIMEOUT_MS = 0;
     } settings;
 
   private:

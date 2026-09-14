@@ -4199,6 +4199,7 @@ void Audio::processWebStream() {
     if (m_f_firstCall) { // runs only ont time per connection, prepare for start
         m_f_firstCall = false;
         m_f_stream = false;
+        m_pwst.startTime = millis();
         m_pwst.chunkSize = 0;
         m_metacount = m_metaint;
         m_f_allDataReceived = false;
@@ -4267,8 +4268,18 @@ void Audio::processWebStream() {
             return;
     }
 
-    // start audio decoding - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (InBuff.bufferFilled() > m_pwst.maxFrameSize * 2 && !m_f_stream) { // waiting for buffer filled
+    // Start decoding only after the application-requested initial reserve has
+    // been built.  The timeout preserves the original two-frame start for a
+    // source which cannot fill the requested reserve in time.
+    const uint32_t frameMinimum = m_pwst.maxFrameSize * 2;
+    const uint32_t configuredReserve = settings.BUFFER_TRESHOLD_WEBSTREAM;
+    const uint32_t startThreshold = max(frameMinimum, configuredReserve);
+    const bool reserveReady = InBuff.bufferFilled() > startThreshold;
+    const bool reserveTimedOut = configuredReserve &&
+                                 settings.BUFFER_TRESHOLD_WEBSTREAM_TIMEOUT_MS &&
+                                 (millis() - m_pwst.startTime >= settings.BUFFER_TRESHOLD_WEBSTREAM_TIMEOUT_MS) &&
+                                 (InBuff.bufferFilled() > frameMinimum);
+    if ((reserveReady || reserveTimedOut) && !m_f_stream) { // waiting for buffer filled
         info(*this, evt_info, "stream ready");
         m_f_stream = true; // ready to play the audio data
     }

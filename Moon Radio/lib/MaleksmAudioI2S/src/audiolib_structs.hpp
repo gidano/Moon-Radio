@@ -209,6 +209,7 @@ typedef struct _tspp { // used in ts_parsePacket
 
 struct pwst_t { // used in processWebStream
     uint16_t maxFrameSize;
+    uint32_t startTime = 0;
     uint32_t chunkSize = 0;
     bool     f_skipCRLF = false;
     uint32_t availableBytes;
