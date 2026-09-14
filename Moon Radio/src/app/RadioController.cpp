@@ -31,6 +31,12 @@ constexpr uint32_t kWebServiceMs = 25;
 constexpr uint32_t kStreamInitialGraceMs = 20000;
 constexpr uint32_t kStreamStallRecoverMs = 12000;
 constexpr uint32_t kStreamRecoveryCooldownMs = 30000;
+constexpr uint32_t kStartupPrebufferVisibleMs = 3000;
+constexpr uint32_t kStartupPrebufferTotalMs = 5000;
+// A dekóder saját "slow stream" jelzése után ennyi ideig nem indul új
+// borítóhálózat. Ez nem változtatja meg a borító indítási RAM- vagy
+// pufferküszöbeit.
+constexpr uint32_t kSlowStreamArtworkPauseMs = 15000;
 constexpr uint32_t kClockTtsMaxActiveMs = 12000;
 constexpr uint32_t kClockTtsNoProgressMs = 3500;
 constexpr uint32_t kClockTtsFadeDownStepMs = 180;
@@ -258,9 +264,21 @@ bool RadioController::begin() {
   refreshDisplay(true);
   display_.loop();
   if (wifiManager_.connected() && stationStore_.count() > 0) {
-    connectCurrentStation();
+    if (connectCurrentStation()) {
+      // While the known bootlogo stays on screen, feed the normal stream
+      // reader continuously.  This runs before weather, metadata and artwork
+      // work can compete for Wi-Fi/RAM, and is display-profile independent.
+      const uint32_t prebufferStartedAt = millis();
+      startupPrebufferUntil_ = prebufferStartedAt + kStartupPrebufferTotalMs;
+      while (millis() - prebufferStartedAt < kStartupPrebufferVisibleMs) {
+        audio_.loop();
+        display_.loop();
+      }
+    }
   }
+  display_.finishStartupBootLogo();
   refreshDisplay(true);
+  display_.loop();
   initialized_ = true;
   return true;
 }
@@ -299,6 +317,9 @@ void RadioController::loop() {
   }
 
   audio_.loop();
+  if (audio_.consumeSlowStreamWarning()) {
+    logoManager_.deferAlbumCoverSearch(kSlowStreamArtworkPauseMs);
+  }
   input_.loop();
   if (backgroundUploadMode_) {
     audio_.setVisualizationEnabled(false);
@@ -333,34 +354,46 @@ void RadioController::loop() {
   const size_t bufferFilled = audio_.bufferFilled();
   const bool running = audio_.running();
   const bool wifiConnected = wifiManager_.connected();
-
-  // A MyOnlineRadio HTTPS-címlekérés közben ne induljon egy második, szintén
-  // hálózatot és belső RAM-ot használó borítófeladat.
-  if (!metadata_.busy() && now - lastArtworkAt_ >= kArtworkServiceMs) {
-    lastArtworkAt_ = now;
-    AudioEngine::ArtworkEvent artworkEvent;
-    while (audio_.takeArtworkEvent(artworkEvent)) {
-      if (artworkEvent.kind == AudioEngine::ArtworkEventKind::IcyLogo) {
-        logoManager_.setIcyLogo(artworkEvent.text, currentPlayUrl_);
-      } else if (!playlist_.active()) {
-        std::vector<uint32_t> segments;
-        segments.reserve(artworkEvent.segmentValues);
-        for (uint8_t index = 0; index < artworkEvent.segmentValues; ++index)
-          segments.push_back(artworkEvent.segments[index]);
-        logoManager_.setEmbeddedImage(currentPlayUrl_, segments);
+  const bool startupPrebufferActive =
+      startupPrebufferUntil_ &&
+      static_cast<int32_t>(now - startupPrebufferUntil_) < 0;
+  // The first five seconds belong exclusively to the stream reader.  The
+  // bootlogo itself is visible for three seconds; the dashboard may appear
+  // for the remaining two, but weather/metadata/artwork must not compete for
+  // Wi-Fi or internal heap before the initial reserve is complete.
+  if (!startupPrebufferActive) {
+    // A MyOnlineRadio HTTPS-címlekérés közben ne induljon egy második, szintén
+    // hálózatot és belső RAM-ot használó borítófeladat.
+    if (!metadata_.busy() && now - lastArtworkAt_ >= kArtworkServiceMs) {
+      lastArtworkAt_ = now;
+      AudioEngine::ArtworkEvent artworkEvent;
+      while (audio_.takeArtworkEvent(artworkEvent)) {
+        if (artworkEvent.kind == AudioEngine::ArtworkEventKind::IcyLogo) {
+          logoManager_.setIcyLogo(artworkEvent.text, currentPlayUrl_);
+        } else if (!playlist_.active()) {
+          std::vector<uint32_t> segments;
+          segments.reserve(artworkEvent.segmentValues);
+          for (uint8_t index = 0; index < artworkEvent.segmentValues; ++index)
+            segments.push_back(artworkEvent.segments[index]);
+          logoManager_.setEmbeddedImage(currentPlayUrl_, segments);
+        }
       }
+      const AudioSnapshot snapshot = audioSnapshot();
+      logoManager_.setAlbumTitle(snapshot.streamTitle);
+      logoManager_.loop(running, bufferFilled, snapshot.codec,
+                        snapshot.bitrateKbps, snapshot.bufferPercent);
     }
-    const AudioSnapshot snapshot = audioSnapshot();
-    logoManager_.setAlbumTitle(snapshot.streamTitle);
-    logoManager_.loop(running, bufferFilled, snapshot.codec,
-                      snapshot.bitrateKbps, snapshot.bufferPercent);
-  }
 
-  if (!logoManager_.busy() && now - lastMetadataAt_ >= kMetadataServiceMs) {
-    lastMetadataAt_ = now;
-    metadata_.loop(wifiConnected, running, bufferFilled);
+    if (!logoManager_.busy() && now - lastMetadataAt_ >= kMetadataServiceMs) {
+      lastMetadataAt_ = now;
+      metadata_.loop(wifiConnected, running, bufferFilled);
+    }
+    // A borítófeladat és az időjárás is HTTP/TLS-t, illetve belső heapet kér.
+    // Az óránkénti időjárásfrissítés néhány másodperces halasztása nem számít,
+    // de az indításuk egyidejűsége kis tartalékú rádióknál az audio streamet
+    // szoríthatja ki. A metadata út már ugyanezt a kizárást használja.
+    if (!logoManager_.busy()) weather_.loop(wifiConnected);
   }
-  weather_.loop(wifiConnected);
   performanceMonitor_.update();
   if (now - lastWifiLoopAt_ >= kWifiServiceMs) {
     lastWifiLoopAt_ = now;

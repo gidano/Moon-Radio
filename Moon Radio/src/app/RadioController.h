@@ -190,6 +190,7 @@ class RadioController {
   uint32_t lastWebLoopAt_{0};
   uint32_t lastAudioDataAt_{0};
   uint32_t lastStreamRecoveryAt_{0};
+  uint32_t startupPrebufferUntil_{0};
   uint32_t lastObservedAudioTime_{0};
   size_t lastObservedBufferFilled_{0};
   bool decoderProgressObserved_{false};
