@@ -221,6 +221,13 @@ bool AudioEngine::begin(uint8_t volume) {
   // ennek ellenére minden egyes PCM mintán három lebegőpontos biquadot
   // számolna, ezért sík hangszínnél teljesen kihagyjuk.
   audio_.settings.IIR_FILTER = false;
+  // A normál MP3/AAC adatfolyam dekódolása csak egy használható induló
+  // tartalék után indulhat.  Ez a Maleksm HLS-előtöltési elvét alkalmazza
+  // a hagyományos streamre is, de 5 mp után a gyengébb adó sem marad néma.
+  // Ez minden kijelzőprofilt azonosan véd; a megjelenítő saját útjához nem
+  // nyúl, csak a közös audio dekóder indulási feltételét állítja.
+  audio_.settings.BUFFER_TRESHOLD_WEBSTREAM = 200U * 1024U;
+  audio_.settings.BUFFER_TRESHOLD_WEBSTREAM_TIMEOUT_MS = 5000U;
 #ifdef I2S_MCLK
   if (!audio_.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT, I2S_MCLK)) {
 #else
@@ -412,12 +419,22 @@ AudioSnapshot AudioEngine::snapshot(const String& stationName) {
       total ? static_cast<uint8_t>((filled * 100U) / total) : 0;
 
   if (metadataMutex_ && xSemaphoreTake(metadataMutex_, pdMS_TO_TICKS(30))) {
-  result.streamTitle = streamTitle_;
-  result.codec = codec_;
-  result.statusText = statusText_;
+    result.streamTitle = streamTitle_;
+    result.codec = codec_;
+    result.statusText = statusText_;
     result.stateCode = stateCode_;
     result.bitrateKbps = bitrateKbps_;
     xSemaphoreGive(metadataMutex_);
+  }
+  // Nem minden élő adó küld icy-br fejlécet / bitrate eseményt. A dekóder
+  // ilyenkor ismeri a feldolgozott MP3 frame-ek tényleges vagy becsült
+  // bitrátáját, ezért ezt használjuk tartalékként a kijelzéshez és a
+  // borítóletöltés pufferküszöbéhez.
+  if (!result.bitrateKbps) {
+    const uint32_t decoderBitrate = audio_.getBitRate();
+    result.bitrateKbps = decoderBitrate >= 1000
+                             ? (decoderBitrate + 500) / 1000
+                             : decoderBitrate;
   }
   result.initialized = initialized_;
   result.commandQueued = commandQueued_;
@@ -432,6 +449,12 @@ AudioSnapshot AudioEngine::snapshot(const String& stationName) {
 bool AudioEngine::consumeEndOfFile() {
   if (!endOfFile_) return false;
   endOfFile_ = false;
+  return true;
+}
+
+bool AudioEngine::consumeSlowStreamWarning() {
+  if (!slowStreamWarning_) return false;
+  slowStreamWarning_ = false;
   return true;
 }
 
@@ -460,19 +483,17 @@ void AudioEngine::processDeferredLogs() {
   if (!logQueue_) return;
   DeferredLog log;
   while (xQueueReceive(logQueue_, &log, 0) == pdTRUE) {
-    Serial.printf("[audio] %s\n", log.text);
-    if (metadataMutex_ &&
-        xSemaphoreTake(metadataMutex_, pdMS_TO_TICKS(30))) {
-      statusText_ = log.text;
-      stateCode_ = "HIBA";
-      xSemaphoreGive(metadataMutex_);
-    }
+    Audio::msg_t message;
+    message.e = static_cast<Audio::event_t>(log.event);
+    message.msg = log.text;
+    handleAudioInfo(message);
   }
 }
 
-void AudioEngine::deferAudioLog(const char* text) {
+void AudioEngine::deferAudioLog(Audio::event_t event, const char* text) {
   if (!logQueue_) return;
   DeferredLog log;
+  log.event = static_cast<uint8_t>(event);
   strlcpy(log.text, text ? text : "", sizeof(log.text));
   if (xQueueSend(logQueue_, &log, 0) == pdTRUE) return;
 
@@ -498,12 +519,18 @@ uint8_t AudioEngine::toInternalVolume(uint8_t displayVolume) {
 
 void AudioEngine::audioInfoCallback(Audio::msg_t message) {
   if (!instance_) return;
-  // Az AUDIO_LOG_IMPL a dekóder PeriodicTask feladatából is hívhatja ezt
-  // a callbacket. Ott a Serial.printf/String feldolgozás stackigénye egy
-  // hibás MP3 frame mély Huffman hívási láncán stack-canary rebootot okozott.
-  // A dekóderfeladat ezért csak másol, a nehéz feldolgozás a loopTaskon fut.
-  if (message.e == Audio::evt_log) {
-    instance_->deferAudioLog(message.msg);
+  // The decoder PeriodicTask runs on core 0.  It must not run Serial,
+  // String/UTF-8 work or mutex waits from a deep MP3 decode call chain;
+  // copy every textual event to the Arduino loop task instead.  Artwork image
+  // vectors retain a different payload and continue through their small,
+  // copy-only queue path below.
+  const bool fromDecoderCore = xPortGetCoreID() == 0;
+  const bool deferTextEvent =
+      message.e == Audio::evt_info || message.e == Audio::evt_log ||
+      message.e == Audio::evt_streamtitle || message.e == Audio::evt_bitrate ||
+      message.e == Audio::evt_id3data || message.e == Audio::evt_icylogo;
+  if (message.e == Audio::evt_log || (fromDecoderCore && deferTextEvent)) {
+    instance_->deferAudioLog(message.e, message.msg);
     return;
   }
   instance_->handleAudioInfo(message);
@@ -540,6 +567,9 @@ void AudioEngine::handleAudioInfo(Audio::msg_t message) {
   }
 
   if (message.e == Audio::evt_info || message.e == Audio::evt_log) {
+    if (strstr(text, "slow stream") != nullptr) {
+      slowStreamWarning_ = true;
+    }
     Serial.printf("[audio] %s\n", text);
     if (metadataMutex_ &&
         xSemaphoreTake(metadataMutex_, pdMS_TO_TICKS(30))) {

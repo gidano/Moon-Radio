@@ -38,11 +38,15 @@ class AudioEngine {
   void setVisualizationEnabled(bool enabled);
   AudioSnapshot snapshot(const String& stationName);
   bool consumeEndOfFile();
+  // A dekóder által jelzett lassú adatfolyamot a vezérlő a nem létfontosságú
+  // hálózati háttérmunkák (például borítókeresés) átmeneti szüneteltetésére
+  // használhatja. A lejátszás működésébe nem avatkozik be.
+  bool consumeSlowStreamWarning();
   bool takeArtworkEvent(ArtworkEvent& event);
 
   size_t bufferFilled();
   size_t bufferFree();
- size_t bufferSize();
+  size_t bufferSize();
   bool running();
   bool paused() const;
   uint32_t audioCurrentTime();
@@ -50,12 +54,13 @@ class AudioEngine {
 
  private:
   struct DeferredLog {
+    uint8_t event{static_cast<uint8_t>(Audio::evt_log)};
     char text[256]{};
   };
 
   static void audioInfoCallback(Audio::msg_t message);
   void processDeferredLogs();
-  void deferAudioLog(const char* text);
+  void deferAudioLog(Audio::event_t event, const char* text);
   void handleAudioInfo(Audio::msg_t message);
   void setOutputEnabled(bool enabled);
   static uint8_t toInternalVolume(uint8_t displayVolume);
@@ -78,6 +83,7 @@ class AudioEngine {
   volatile bool paused_{false};
   volatile bool connecting_{false};
   volatile bool endOfFile_{false};
+  volatile bool slowStreamWarning_{false};
   volatile bool suppressEndOfFile_{false};
   volatile bool initialized_{false};
   volatile bool commandQueued_{false};
