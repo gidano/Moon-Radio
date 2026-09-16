@@ -197,6 +197,14 @@ void DisplayDevice::setAxsFactoryScreenFlipped(bool flipped) {
 #endif
 }
 
+bool DisplayDevice::primeAxsFactoryPanel() {
+#if DISPLAY_PROFILE_AXS15231B && AXS_FACTORY_DIRECT_LVGL
+  return axsFactoryTransport_.primePanelFrame();
+#else
+  return false;
+#endif
+}
+
 bool DisplayDevice::flushAxsLvglRect(int32_t x, int32_t y, int32_t w,
                                       int32_t h, const uint16_t* pixels) {
 #if DISPLAY_PROFILE_AXS15231B

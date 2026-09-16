@@ -30,6 +30,7 @@ class DisplayDevice : public lgfx::LGFX_Device {
   bool beginAxsFactoryTransport();
   void setAxsFactoryColorInverted(bool inverted);
   void setAxsFactoryScreenFlipped(bool flipped);
+  bool primeAxsFactoryPanel();
   bool flushAxsLvglRect(int32_t x, int32_t y, int32_t w, int32_t h,
                         const uint16_t* pixels);
   // Sends the left 240 logical columns using the factory's complete 320-row

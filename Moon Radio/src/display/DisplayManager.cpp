@@ -80,6 +80,12 @@ bool DisplayManager::begin(const NowPlayingActions& actions) {
     Serial.println("[display] AXS gyari kep-ut nem indult");
     return false;
   }
+  if (!device_.primeAxsFactoryPanel()) {
+    Serial.println("[display] AXS indulasi kep-ut elokeszitesi hiba");
+    return false;
+  }
+  // Let the controller latch DISPON before the full-screen bootlogo arrives.
+  delay(40);
 #endif
 #if !DISPLAY_PROFILE_AXS15231B || !AXS_FACTORY_DIRECT_LVGL
   device_.fillScreen(TFT_BLACK);
