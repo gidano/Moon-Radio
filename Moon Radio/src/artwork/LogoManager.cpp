@@ -100,8 +100,17 @@ constexpr uint32_t kLowBitrateAlbumBufferStabilizationMs = 6000;
 constexpr uint32_t kOpportunisticAlbumBufferStabilizationMs = 750;
 constexpr uint32_t kAlbumNetworkAbortRetryMs = 15000;
 constexpr uint32_t kMaximumAlbumNetworkRetryMs = 60000;
+// A borító letöltése immár külön, kisebb hálózati feladatban fut. Az
+// indítási RAM-kapu ezért ehhez tartozzon, ne a későbbi képfeldolgozó nagyobb
+// stackjéhez. Nem-AXS kijelzőn így 40 KiB-ról indulhat a keresés, miközben a
+// 20 KiB-os hálózati stack mellett további 20 KiB belső tartalék megmarad.
+#if DISPLAY_PROFILE_AXS15231B
 constexpr size_t kMinimumAlbumInternalHeap =
-    kArtworkTaskStackBytes + 16 * 1024;
+    kArtworkNetworkTaskStackBytes + 16 * 1024;
+#else
+constexpr size_t kMinimumAlbumInternalHeap =
+    kArtworkNetworkTaskStackBytes + 20 * 1024;
+#endif
 constexpr uint32_t kReadIdleTimeoutMs = 3500;
 // Az API-keresés válasza kicsi, a nagyobb memóriaterhelés csak a tényleges
 // kép letöltésekor/dekódolásakor jön. A borítótask nagyobb stackje mellett
@@ -961,6 +970,16 @@ bool splitCombinedTitle(const String& combined, String& artist, String& title) {
   title = combined.substring(separator + 3);
   artist.trim();
   title.trim();
+  // A Mixxx a külső metadata végére a saját programnevét fűzi. Ez nem a
+  // dalcím része, ezért csak a borító-adatbázisok felé távolítjuk el; a
+  // képernyőn megjelenő eredeti metadata változatlan marad.
+  String lowerTitle = title;
+  lowerTitle.toLowerCase();
+  constexpr char kMixxxSuffix[] = " | mixxx";
+  if (lowerTitle.endsWith(kMixxxSuffix)) {
+    title.remove(title.length() - (sizeof(kMixxxSuffix) - 1));
+    title.trim();
+  }
   String normalizedArtist = artist;
   normalizedArtist.replace(" ", "");
   normalizedArtist.toLowerCase();
@@ -969,7 +988,7 @@ bool splitCombinedTitle(const String& combined, String& artist, String& title) {
 
   const char* blocked[] = {
       "unknown", "not provided", "n/a", "untitled", "no title"};
-  String lowerTitle = title;
+  lowerTitle = title;
   lowerTitle.toLowerCase();
   for (const char* value : blocked) {
     if (lowerTitle == value) return false;
