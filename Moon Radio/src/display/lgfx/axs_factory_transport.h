@@ -106,7 +106,60 @@ class AxsFactoryTransport {
     return result;
   }
 
+  // Before LVGL owns the first scene, write a complete known frame and turn
+  // the panel output on.  Some AXS boards acknowledge an immediate first
+  // LVGL transfer but keep the physical output black until this priming step.
+  bool primePanelFrame() {
+    if (!transportMutex_ ||
+        xSemaphoreTake(transportMutex_, pdMS_TO_TICKS(250)) != pdTRUE) {
+      return false;
+    }
+    const bool result = primePanelFrameLocked();
+    xSemaphoreGive(transportMutex_);
+    return result;
+  }
+
  private:
+  bool primePanelFrameLocked() {
+    if (!ready_ || faulted_ || !staging_) return false;
+    const int32_t columnsPerBlock =
+        static_cast<int32_t>(stagingPixels_ / kLogicalHeight);
+    if (columnsPerBlock <= 0) return false;
+
+    // A black RGB565 frame leaves no visible flash before the bootlogo.
+    constexpr uint16_t kWireBlack = 0x0000;
+    const uint8_t columns[] = {0x00, 0x00, 0x01, 0x3F};
+    bool queuedColor = false;
+    for (int32_t columnStart = 0; columnStart < kLogicalWidth;
+         columnStart += columnsPerBlock) {
+      if (queuedColor && !waitForQueuedColor()) {
+        fail("teszt DMA szinkron");
+        return false;
+      }
+      const int32_t columnsInBlock =
+          min(columnsPerBlock, kLogicalWidth - columnStart);
+      const size_t pixels =
+          static_cast<size_t>(columnsInBlock) * kLogicalHeight;
+      for (size_t index = 0; index < pixels; ++index) staging_[index] = kWireBlack;
+      if (!sendParam(kCmdCaseT, columns, sizeof(columns)) ||
+          !sendColor(columnStart == 0 ? kCmdRamWrite : kCmdRamWriteContinue,
+                     staging_, pixels * sizeof(uint16_t))) {
+        fail("teszt kuldes");
+        return false;
+      }
+      queuedColor = true;
+    }
+    if (queuedColor && !waitForQueuedColor()) {
+      fail("teszt DMA vegso szinkron");
+      return false;
+    }
+    if (!showPanel()) {
+      fail("teszt bekapcsolas");
+      return false;
+    }
+    return true;
+  }
+
   bool flushFactoryRotatedLocked(int32_t x, int32_t y, int32_t w, int32_t h,
                                  const uint16_t* source,
                                  bool sourceIsWireRgb565) {
