@@ -7,6 +7,14 @@
 
 #define LV_COLOR_DEPTH 16
 
+/* Az LVGL 64 KiB-os belső memóriakészlete alapból statikus tömb a szűkös
+   belső DRAM-ban.  A PSRAM-ba tesszük: így a TLS-es audio (esp-aes DMA),
+   a lwIP és a háttérfeladatok stackjei számára ~64 KiB belső RAM szabadul
+   fel.  A rajzolási puffer (DisplayManager) továbbra is belső DMA RAM. */
+#define LV_MEM_POOL_INCLUDE <esp_heap_caps.h>
+#define LV_MEM_POOL_ALLOC(size) \
+  heap_caps_malloc((size), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)
+
 #define LV_USE_LOG 0
 
 #define LV_USE_FONT_COMPRESSED 1
