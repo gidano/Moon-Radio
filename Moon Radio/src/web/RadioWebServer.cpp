@@ -4,11 +4,14 @@
 #include <LittleFS.h>
 #include <NetworkClient.h>
 #include <NetworkClientSecure.h>
+#include <esp_heap_caps.h>
+#include <cstring>
 #include <memory>
 #include <new>
 #include <vector>
 
 #include "../app/RadioController.h"
+#include "../artwork/MemoryArtwork.h"
 
 namespace {
 
@@ -723,10 +726,23 @@ void RadioWebServer::sendBuffer() {
 
 void RadioWebServer::sendCurrentLogo() {
   String path = radio_.logos().currentPath();
-  if (path.isEmpty() || !LittleFS.exists(path)) {
+  // Az album-borító thumbnail PSRAM-ban van, nem a LittleFS-en.
+  struct PsramDeleter {
+    void operator()(uint8_t* pointer) const { heap_caps_free(pointer); }
+  };
+  std::unique_ptr<uint8_t, PsramDeleter> memoryPixels;
+  if (memory_artwork::contains(path)) {
+    memoryPixels.reset(static_cast<uint8_t*>(
+        heap_caps_malloc(memory_artwork::kPixelBytes,
+                         MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)));
+    if (memoryPixels &&
+        !memory_artwork::copyPixels(path, memoryPixels.get()))
+      memoryPixels.reset();
+  }
+  if (!memoryPixels && (path.isEmpty() || !LittleFS.exists(path))) {
     path = "/logos/nologo.png";
   }
-  if (!LittleFS.exists(path)) {
+  if (!memoryPixels && !LittleFS.exists(path)) {
     server_.send(404, "text/plain; charset=utf-8", "Nincs logó.");
     return;
   }
@@ -739,24 +755,30 @@ void RadioWebServer::sendCurrentLogo() {
     return;
   }
 
-  File file = LittleFS.open(path, FILE_READ);
-  uint8_t sourceHeader[8]{};
-  const bool valid =
-      file && file.read(sourceHeader, sizeof(sourceHeader)) ==
-                  sizeof(sourceHeader) &&
-      sourceHeader[0] == 'S' && sourceHeader[1] == 'R' &&
-      sourceHeader[2] == '5' && sourceHeader[3] == '7';
-  const uint16_t width =
-      valid ? static_cast<uint16_t>(sourceHeader[4] |
-                                    (sourceHeader[5] << 8))
-            : 0;
-  const uint16_t height =
-      valid ? static_cast<uint16_t>(sourceHeader[6] |
-                                    (sourceHeader[7] << 8))
-            : 0;
+  File file;
+  bool valid = false;
+  uint16_t width = 0;
+  uint16_t height = 0;
+  if (memoryPixels) {
+    valid = true;
+    width = memory_artwork::kThumbnailSize;
+    height = memory_artwork::kThumbnailSize;
+  } else {
+    file = LittleFS.open(path, FILE_READ);
+    uint8_t sourceHeader[8]{};
+    valid = file && file.read(sourceHeader, sizeof(sourceHeader)) ==
+                        sizeof(sourceHeader) &&
+            sourceHeader[0] == 'S' && sourceHeader[1] == 'R' &&
+            sourceHeader[2] == '5' && sourceHeader[3] == '7';
+    if (valid) {
+      width = static_cast<uint16_t>(sourceHeader[4] | (sourceHeader[5] << 8));
+      height =
+          static_cast<uint16_t>(sourceHeader[6] | (sourceHeader[7] << 8));
+    }
+  }
   const size_t sourceBytes = static_cast<size_t>(width) * height * 2;
   if (!valid || width == 0 || height == 0 ||
-      file.size() != 8 + sourceBytes) {
+      (!memoryPixels && file.size() != 8 + sourceBytes)) {
     if (file) file.close();
     server_.send(404, "text/plain; charset=utf-8", "Hibás logó.");
     return;
@@ -807,7 +829,13 @@ void RadioWebServer::sendCurrentLogo() {
     return;
   }
   for (uint16_t y = 0; y < height && client.connected(); ++y) {
-    if (file.read(sourceRow.get(), width * 2) != width * 2) break;
+    if (memoryPixels) {
+      memcpy(sourceRow.get(),
+             memoryPixels.get() + static_cast<size_t>(y) * width * 2,
+             static_cast<size_t>(width) * 2);
+    } else if (file.read(sourceRow.get(), width * 2) != width * 2) {
+      break;
+    }
     memset(bmpRow.get(), 0, rowBytes);
     for (uint16_t x = 0; x < width; ++x) {
       // Az SR565 bájtcserélt RGB565, ahogy az LVGL-kijelző is használja.
