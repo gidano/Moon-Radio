@@ -11,6 +11,7 @@
 #include <libs/lodepng/lodepng.h>
 #include <time.h>
 
+#include "../../artwork/MemoryArtwork.h"
 #include "../../time/DateNameday.h"
 #include "options.h"
 
@@ -1356,32 +1357,47 @@ void NowPlayingScreen::updateLogo(const String& requestedName) {
 }
 
 bool NowPlayingScreen::loadRgb565Thumbnail(const String& path) {
-  File file = LittleFS.open(path, FILE_READ);
-  if (!file || file.size() != 8 + 128 * 128 * 2) {
-    if (file) file.close();
-    return false;
-  }
-  uint8_t header[8]{};
-  const bool valid =
-      file.read(header, sizeof(header)) == sizeof(header) &&
-      header[0] == 'S' && header[1] == 'R' && header[2] == '5' &&
-      header[3] == '7' && header[4] == 128 && header[5] == 0 &&
-      header[6] == 128 && header[7] == 0;
-  if (!valid) {
-    file.close();
-    return false;
-  }
-
   constexpr size_t pixelBytes = 128 * 128 * 2;
-  uint8_t* pixels = static_cast<uint8_t*>(
-      heap_caps_malloc(pixelBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-  if (!pixels) pixels = static_cast<uint8_t*>(malloc(pixelBytes));
-  if (!pixels || file.read(pixels, pixelBytes) != pixelBytes) {
-    if (pixels) free(pixels);
+  static_assert(pixelBytes == memory_artwork::kPixelBytes,
+                "thumbnail size mismatch");
+  uint8_t* pixels = nullptr;
+  // Az album-borító thumbnail PSRAM-ban van, nem a LittleFS-en.
+  if (memory_artwork::contains(path)) {
+    pixels = static_cast<uint8_t*>(
+        heap_caps_malloc(pixelBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (!pixels) pixels = static_cast<uint8_t*>(malloc(pixelBytes));
+    if (!pixels) return false;
+    if (!memory_artwork::copyPixels(path, pixels)) {
+      free(pixels);
+      return false;
+    }
+  } else {
+    File file = LittleFS.open(path, FILE_READ);
+    if (!file || file.size() != 8 + pixelBytes) {
+      if (file) file.close();
+      return false;
+    }
+    uint8_t header[8]{};
+    const bool valid =
+        file.read(header, sizeof(header)) == sizeof(header) &&
+        header[0] == 'S' && header[1] == 'R' && header[2] == '5' &&
+        header[3] == '7' && header[4] == 128 && header[5] == 0 &&
+        header[6] == 128 && header[7] == 0;
+    if (!valid) {
+      file.close();
+      return false;
+    }
+
+    pixels = static_cast<uint8_t*>(
+        heap_caps_malloc(pixelBytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (!pixels) pixels = static_cast<uint8_t*>(malloc(pixelBytes));
+    if (!pixels || file.read(pixels, pixelBytes) != pixelBytes) {
+      if (pixels) free(pixels);
+      file.close();
+      return false;
+    }
     file.close();
-    return false;
   }
-  file.close();
 
   if (logoPixels_) free(logoPixels_);
   logoPixels_ = pixels;
