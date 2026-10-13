@@ -188,8 +188,8 @@ void DisplayManager::loop() {
     }
 #endif
   }
-  // The retained bootlogo is a real startup phase, not merely a picture:
-  // avoid background/VU/UI work until the stream has received its head start.
+  // While the bootlogo overlay is visible the dashboard below it is hidden;
+  // skip its background/VU/UI work until the overlay is released.
   if (screenMode_ == ScreenMode::Normal && !bootLogoOverlay_) {
     screen_.loop(now);
   }
