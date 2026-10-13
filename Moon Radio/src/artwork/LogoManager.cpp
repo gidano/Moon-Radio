@@ -11,6 +11,7 @@
 #include <new>
 
 #include "options.h"
+#include "MemoryArtwork.h"
 
 void* stbiHeapMalloc(size_t size) {
   void* memory =
@@ -70,6 +71,14 @@ constexpr uint32_t kArtworkTaskStackBytes = 28 * 1024;
 // reserve away from the audio decoder.
 constexpr uint32_t kArtworkNetworkTaskStackBytes = 20 * 1024;
 #endif
+// Ha a belső heap töredezett (van elég szabad hely, de nincs egyben 28 KiB),
+// a feladat ezzel a kisebb stackkel indul.  Az AXS profil minden képfeladatot
+// ezzel a 16 KiB-tal futtat, ugyanezen a kódon, tehát elegendő.
+constexpr uint32_t kArtworkFallbackTaskStackBytes = 16 * 1024;
+// A task stackjének lefoglalása után ennyi belső heapnek meg kell maradnia.
+// Ebből él a TLS-es audio stream (esp-aes DMA bounce buffer, lwIP): ha
+// elfogy, az adás "esp-aes: Failed to allocate memory" hibával megszakad.
+constexpr size_t kArtworkInternalReserveBytes = 16 * 1024;
 constexpr size_t kMinimumLogoNetworkBuffer = 192 * 1024;
 constexpr size_t kMinimumConfiguredLogoBuffer = 128 * 1024;
 constexpr size_t kMinimumAlbumCoverBuffer = 48 * 1024;
@@ -98,18 +107,22 @@ constexpr uint8_t kMinimumLosslessAlbumContinuePercent = 12;
 constexpr uint32_t kAlbumBufferStabilizationMs = 3000;
 constexpr uint32_t kLowBitrateAlbumBufferStabilizationMs = 6000;
 constexpr uint32_t kOpportunisticAlbumBufferStabilizationMs = 750;
-constexpr uint32_t kAlbumNetworkAbortRetryMs = 15000;
-constexpr uint32_t kMaximumAlbumNetworkRetryMs = 60000;
+// Erőforrás miatti halasztás után 10, 20, majd 30 mp múlva próbál újra.  A
+// belső heap általában gyorsan normalizálódik; a 30/60 mp-es várakozás
+// feleslegesen sokáig hagyta borító nélkül a kijelzőt.
+constexpr uint32_t kAlbumNetworkAbortRetryMs = 5000;
+constexpr uint32_t kMaximumAlbumNetworkRetryMs = 30000;
 // A borító letöltése immár külön, kisebb hálózati feladatban fut. Az
 // indítási RAM-kapu ezért ehhez tartozzon, ne a későbbi képfeldolgozó nagyobb
-// stackjéhez. Nem-AXS kijelzőn így 40 KiB-ról indulhat a keresés, miközben a
-// 20 KiB-os hálózati stack mellett további 20 KiB belső tartalék megmarad.
+// stackjéhez. Nem-AXS kijelzőn így 36 KiB-ról indulhat a keresés: a 20 KiB-os
+// hálózati stack mellett 16 KiB belső tartalék marad (az AXS profilon bevált
+// érték; a TLS munkaterület a PSRAM-ban van).
 #if DISPLAY_PROFILE_AXS15231B
 constexpr size_t kMinimumAlbumInternalHeap =
     kArtworkNetworkTaskStackBytes + 16 * 1024;
 #else
 constexpr size_t kMinimumAlbumInternalHeap =
-    kArtworkNetworkTaskStackBytes + 20 * 1024;
+    kArtworkNetworkTaskStackBytes + 16 * 1024;
 #endif
 constexpr uint32_t kReadIdleTimeoutMs = 3500;
 // Az API-keresés válasza kicsi, a nagyobb memóriaterhelés csak a tényleges
@@ -117,7 +130,9 @@ constexpr uint32_t kReadIdleTimeoutMs = 3500;
 // gyenge pufferű adóknál 17--18 KiB szabad belső heap a jellemző; ezt még
 // engedjük próbálkozni, a kép-letöltés saját kapuja utána külön véd.
 constexpr size_t kMinimumTextFetchInternalHeap = 16 * 1024;
-constexpr size_t kMinimumTextFetchBlock = 7 * 1024;
+// A TLS munkaterülete PSRAM-ban van; a belső blokk csak a socket/HTTP kliens
+// kis foglalásaihoz kell.  Ugyanaz a 6 KiB, mint a sima képletöltés kapuja.
+constexpr size_t kMinimumTextFetchBlock = 6 * 1024;
 constexpr size_t kMinimumTextReadInternalHeap = 12 * 1024;
 // A teljes kép-letöltés (főleg TLS esetén) több belső munkaterületet használ,
 // mint a rövid API-válasz. A valós tesztben azonban a 24/9 KiB kapu a
@@ -158,6 +173,29 @@ constexpr char kRadioBrowserBases[][35] = {
 volatile uint8_t gAlbumNetworkPoliteLevel = 0;
 volatile bool gAlbumNetworkAborted = false;
 volatile bool gAlbumResourceDeferred = false;
+// Az aktuális állomás logójának thumbnailje: a cache-keret betartásakor ezt
+// nem töröljük, különben minden új borító után újra kellene generálni (újabb
+// flash-írás).  A fő loop csak akkor írja, amikor nem fut képfeladat.
+char gProtectedStationThumbnail[64] = {};
+
+// Flash-írás közben a cache tiltva van, így a 0. magon futó audio dekóder
+// (flash-ben lévő kódja miatt) áll.  Egy 4 KiB-os LittleFS blokk törlése és
+// írása több tíz ms; ha csak 1 ms szünet jut közöttük, az I2S DMA tartaléka
+// (~279 ms) kiürül és akad a hang.  Minden ~2 KiB írás után ennyi időt adunk
+// a dekódernek a felzárkózásra (HE-AAC/SBR-nél kell a nagyobb tartalék).
+constexpr uint32_t kArtworkFlashWritePauseMs = 60;
+constexpr size_t kArtworkFlashWritePaceBytes = 2048;
+
+struct FlashWritePacer {
+  size_t pending = 0;
+  void wrote(size_t bytes) {
+    pending += bytes;
+    if (pending >= kArtworkFlashWritePaceBytes) {
+      pending = 0;
+      vTaskDelay(pdMS_TO_TICKS(kArtworkFlashWritePauseMs));
+    }
+  }
+};
 volatile uint8_t gAlbumProviderStartIndex = 0;
 volatile bool gArtworkPlaybackRunning = false;
 volatile size_t gArtworkBufferFilledBytes = 0;
@@ -347,6 +385,100 @@ bool artworkNetworkShouldAbort() {
            gArtworkBufferPercent < gArtworkAlbumAbortBufferPercent) ||
           (gArtworkAlbumAbortBufferPercent == 0 &&
            gArtworkBufferFilledBytes < gArtworkAlbumAbortBufferBytes));
+}
+
+// Az album-borító letöltött képe: PSRAM-ban marad a dekódolásig, nem kerül
+// a LittleFS-re.  A letöltő és a dekódoló feladat egymás után fut, így
+// egyszerre csak az egyik nyúl hozzá.
+PsramBytes gAlbumImage;
+constexpr const char* kAlbumMemoryImagePath = "mem:album";
+
+void discardArtworkImage(const String& path) {
+  if (path == kAlbumMemoryImagePath) {
+    gAlbumImage.clear();
+    return;
+  }
+  if (!path.isEmpty() && LittleFS.exists(path)) LittleFS.remove(path);
+}
+
+bool artworkPathAvailable(const String& path) {
+  return !path.isEmpty() &&
+         (memory_artwork::contains(path) || LittleFS.exists(path));
+}
+
+String imageExtensionFromHeader(const uint8_t* header, size_t read) {
+  if (read >= 8 && header[0] == 0x89 && header[1] == 'P' &&
+      header[2] == 'N' && header[3] == 'G')
+    return ".png";
+  if (read >= 3 && header[0] == 0xFF && header[1] == 0xD8 &&
+      header[2] == 0xFF)
+    return ".jpg";
+  if (read >= 2 && header[0] == 'B' && header[1] == 'M') return ".bmp";
+  if (read >= 12 && header[0] == 'R' && header[1] == 'I' &&
+      header[2] == 'F' && header[3] == 'F' && header[8] == 'W' &&
+      header[9] == 'E' && header[10] == 'B' && header[11] == 'P')
+    return ".webp";
+  return "";
+}
+
+bool readAlbumImageToMemory(HTTPClient& http, const String& fetchUrl,
+                            int declaredLength) {
+  gAlbumImage.clear();
+  NetworkClient* stream = http.getStreamPtr();
+  if (!stream) {
+    Serial.printf("[logo] kep stream hiba: %s\n", fetchUrl.c_str());
+    return false;
+  }
+  const size_t capacity = declaredLength > 0
+                              ? static_cast<size_t>(declaredLength)
+                              : kMaximumArtworkBytes;
+  if (!gAlbumImage.resize(capacity)) {
+    Serial.printf("[cover] nincs memoria a kephez: %u byte\n",
+                  static_cast<unsigned>(capacity));
+    return false;
+  }
+  size_t written = 0;
+  uint32_t lastReadAt = millis();
+  while ((http.connected() || stream->available()) && written < capacity) {
+    if (artworkNetworkShouldAbort()) {
+      gAlbumNetworkAborted = true;
+      gAlbumResourceDeferred = true;
+      logArtworkNetworkAbort("kep letoltes");
+      gAlbumImage.clear();
+      return false;
+    }
+    const size_t available = stream->available();
+    if (!available) {
+      if (millis() - lastReadAt > kReadIdleTimeoutMs) break;
+      vTaskDelay(pdMS_TO_TICKS(artworkNetworkDelayMs()));
+      continue;
+    }
+    size_t requested = min(available, artworkNetworkChunkLimit(1024));
+    requested = min(requested, capacity - written);
+    const int received =
+        stream->readBytes(gAlbumImage.data + written, requested);
+    if (received <= 0) break;
+    written += static_cast<size_t>(received);
+    lastReadAt = millis();
+    vTaskDelay(pdMS_TO_TICKS(artworkNetworkDelayMs()));
+  }
+  // Ismeretlen hossznál a teljes keret kitöltése túl nagy képet jelent.
+  const bool complete = declaredLength > 0 ? written == capacity
+                                           : written > 0 && written < capacity;
+  if (!complete) {
+    Serial.printf("[logo] incomplet kep: %u byte, vart=%d: %s\n",
+                  static_cast<unsigned>(written), declaredLength,
+                  fetchUrl.c_str());
+    gAlbumImage.clear();
+    return false;
+  }
+  gAlbumImage.length = written;
+  if (imageExtensionFromHeader(gAlbumImage.data, written).isEmpty()) {
+    Serial.printf("[logo] ismeretlen kepformatum: %s\n", fetchUrl.c_str());
+    gAlbumImage.clear();
+    return false;
+  }
+  return true;
 }
 
 uint32_t fnv1a(const String& value) {
@@ -1232,6 +1364,7 @@ bool copyFileRange(const String& sourcePath, size_t offset, size_t length,
   }
   uint8_t buffer[1024];
   size_t remaining = length;
+  FlashWritePacer pacer;
   while (remaining) {
     const size_t requested = min(remaining, sizeof(buffer));
     const int received = source.read(buffer, requested);
@@ -1239,6 +1372,7 @@ bool copyFileRange(const String& sourcePath, size_t offset, size_t length,
         output.write(buffer, received) != static_cast<size_t>(received))
       break;
     remaining -= received;
+    pacer.wrote(received);
     vTaskDelay(1);
   }
   output.flush();
@@ -1632,7 +1766,7 @@ void LogoManager::loop(bool playbackRunning, size_t bufferFilledBytes,
   }
   processResult();
 
-  if (currentPath_.isEmpty() || !LittleFS.exists(currentPath_)) {
+  if (!artworkPathAvailable(currentPath_)) {
     String noLogoThumbnail;
     currentPath_ = findCachedThumbnail("nologo", noLogoThumbnail)
                        ? noLogoThumbnail
@@ -2019,7 +2153,7 @@ void LogoManager::refreshSelection() {
 
   // Keep the currently displayed image while a background search is pending
   // or fails. selectStation() has already installed nologo for a new station.
-  if (currentPath_.isEmpty() || !LittleFS.exists(currentPath_))
+  if (!artworkPathAvailable(currentPath_))
     currentPath_ = "/logos/nologo.png";
 }
 
@@ -2029,6 +2163,9 @@ bool LogoManager::startJob(JobKind kind, const String& source,
   if (task_ || resultReady_) return false;
   Job* job = new (std::nothrow) Job();
   if (!job) return false;
+  strlcpy(gProtectedStationThumbnail,
+          stationSource_.isEmpty() ? "" : thumbnailPath(stationSource_).c_str(),
+          sizeof(gProtectedStationThumbnail));
   job->owner = this;
   job->kind = kind;
   job->source = source;
@@ -2066,14 +2203,52 @@ bool LogoManager::startJob(JobKind kind, const String& source,
   const uint32_t taskStackBytes =
       kind == JobKind::AlbumCover ? kArtworkNetworkTaskStackBytes
                                   : kArtworkTaskStackBytes;
-  const BaseType_t created = xTaskCreatePinnedToCore(
-      taskEntry, "logo", taskStackBytes, job, kArtworkTaskPriority,
-      &task_, kArtworkTaskCore);
+  const size_t freeInternal =
+      heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  const uint32_t smallestStack =
+      min(taskStackBytes, kArtworkFallbackTaskStackBytes);
+  if (freeInternal < smallestStack + kArtworkInternalReserveBytes) {
+    // Nem indítunk: az audio stream tartaléka fontosabb.  A hívó később újra
+    // próbálja; a borító a szokásos halasztott újrapróbát kapja.
+    if (kind == JobKind::AlbumCover || kind == JobKind::AlbumCoverDecode)
+      gAlbumResourceDeferred = true;
+    const uint32_t nowMs = millis();
+    if (!reserveLoggedAt_ || nowMs - reserveLoggedAt_ >= kJobBusyLogMs) {
+      Serial.printf("[logo] %s halasztva: belso heap %u, kell %u+%u\n",
+                    kindName, static_cast<unsigned>(freeInternal),
+                    static_cast<unsigned>(smallestStack),
+                    static_cast<unsigned>(kArtworkInternalReserveBytes));
+      reserveLoggedAt_ = nowMs;
+    }
+    delete job;
+    return false;
+  }
+  BaseType_t created = pdFAIL;
+  if (freeInternal >= taskStackBytes + kArtworkInternalReserveBytes) {
+    created = xTaskCreatePinnedToCore(taskEntry, "logo", taskStackBytes, job,
+                                      kArtworkTaskPriority, &task_,
+                                      kArtworkTaskCore);
+  }
+  if (created != pdPASS && taskStackBytes > kArtworkFallbackTaskStackBytes) {
+    // Vagy nem maradna meg mellette a belső tartalék, vagy nincs ekkora
+    // összefüggő blokk: mindkét esetben a kisebb stack is elég.
+    Serial.printf("[logo] %s: %u byte-os stack (heap=%u, blokk=%u)\n",
+                  kindName,
+                  static_cast<unsigned>(kArtworkFallbackTaskStackBytes),
+                  static_cast<unsigned>(freeInternal),
+                  static_cast<unsigned>(heap_caps_get_largest_free_block(
+                      MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)));
+    created = xTaskCreatePinnedToCore(
+        taskEntry, "logo", kArtworkFallbackTaskStackBytes, job,
+        kArtworkTaskPriority, &task_, kArtworkTaskCore);
+  }
   if (created != pdPASS) {
     task_ = nullptr;
-    Serial.printf("[logo] task inditasi hiba: %s heap=%u psram=%u\n",
+    Serial.printf("[logo] task inditasi hiba: %s heap=%u blokk=%u psram=%u\n",
                   kindName,
                   static_cast<unsigned>(heap_caps_get_free_size(
+                      MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+                  static_cast<unsigned>(heap_caps_get_largest_free_block(
                       MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
                   static_cast<unsigned>(heap_caps_get_free_size(
                       MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)));
@@ -2082,6 +2257,8 @@ bool LogoManager::startJob(JobKind kind, const String& source,
   }
   taskStartedAt_ = millis();
   taskLabel_ = String(kindName) + ": " + (kind == JobKind::AlbumCover ? url : source);
+  // Az album kulcs belső elválasztója (0x1F) a soros konzolon "�"-ként jelenne meg.
+  taskLabel_.replace("\x1f", " - ");
   taskBusyLogged_ = false;
   Serial.printf("[logo] feladat indul: %s\n", taskLabel_.c_str());
   return true;
@@ -2146,8 +2323,7 @@ void LogoManager::executeJob(Job& job) {
         success = makeThumbnail(imagePath, job.source, thumbnail);
         Serial.printf("[cover] jelolt %s\n", success ? "OK" : "nem jo");
         if (success) compactCache(imagePath, thumbnail);
-        else if (!imagePath.isEmpty() && LittleFS.exists(imagePath))
-          LittleFS.remove(imagePath);
+        else discardArtworkImage(imagePath);
         break;
     }
   }
@@ -2221,8 +2397,7 @@ void LogoManager::processResult() {
     // stack by now.  Start the PSRAM-heavy conversion as a clean second phase.
     if (success && startJob(JobKind::AlbumCoverDecode, source, "", path))
       return;
-    if (success && !path.isEmpty() && LittleFS.exists(path))
-      LittleFS.remove(path);
+    if (success) discardArtworkImage(path);
     success = false;
   }
 
@@ -2354,6 +2529,7 @@ String LogoManager::thumbnailPath(const String& key) {
 }
 
 bool LogoManager::validThumbnail(const String& path) {
+  if (memory_artwork::contains(path)) return true;
   File file = LittleFS.open(path, FILE_READ);
   if (!file || file.size() != kThumbnailBytes) {
     if (file) file.close();
@@ -2370,6 +2546,14 @@ bool LogoManager::validThumbnail(const String& path) {
 }
 
 bool thumbnailHasVisiblePixels(const String& path) {
+  if (memory_artwork::contains(path)) {
+    PsramBytes pixels;
+    return pixels.resize(memory_artwork::kPixelBytes) &&
+           memory_artwork::copyPixels(path, pixels.data) &&
+           hasVisiblePixels(pixels.data,
+                            static_cast<size_t>(kThumbnailSize) *
+                                static_cast<size_t>(kThumbnailSize));
+  }
   File file = LittleFS.open(path, FILE_READ);
   if (!file || file.size() != kThumbnailBytes) {
     if (file) file.close();
@@ -2506,6 +2690,15 @@ bool LogoManager::downloadAttempt(const String& fetchUrl, const String& key,
     http->end();
     return false;
   }
+  if (gAlbumNetworkPoliteLevel) {
+    // Album-borító: csak PSRAM-ba töltjük, a flash-t nem érintjük.
+    const bool loaded =
+        readAlbumImageToMemory(*http, fetchUrl, declaredLength);
+    http->end();
+    if (!loaded) return false;
+    imagePath = kAlbumMemoryImagePath;
+    return true;
+  }
   const size_t expectedBytes =
       declaredLength > 0 ? static_cast<size_t>(declaredLength)
                          : kMinimumArtworkFreeBytes;
@@ -2535,6 +2728,7 @@ bool LogoManager::downloadAttempt(const String& fetchUrl, const String& key,
   uint8_t buffer[1024];
   size_t written = 0;
   uint32_t lastReadAt = millis();
+  FlashWritePacer pacer;
   while ((http->connected() || stream->available()) &&
          (declaredLength < 0 ||
           written < static_cast<size_t>(declaredLength))) {
@@ -2561,6 +2755,7 @@ bool LogoManager::downloadAttempt(const String& fetchUrl, const String& key,
     written += received;
     lastReadAt = millis();
     if (written > kMaximumArtworkBytes) break;
+    pacer.wrote(received);
     vTaskDelay(pdMS_TO_TICKS(artworkNetworkDelayMs()));
   }
   output.flush();
@@ -2652,6 +2847,7 @@ bool LogoManager::appendHttpRange(const String& url, uint32_t offset,
   uint8_t buffer[1024];
   uint32_t remaining = length;
   uint32_t lastReadAt = millis();
+  FlashWritePacer pacer;
   while ((http->connected() || stream->available()) && remaining) {
     if (artworkNetworkShouldAbort()) break;
     const size_t available = stream->available();
@@ -2668,6 +2864,7 @@ bool LogoManager::appendHttpRange(const String& url, uint32_t offset,
       break;
     remaining -= received;
     lastReadAt = millis();
+    pacer.wrote(received);
     vTaskDelay(1);
   }
   http->end();
@@ -2843,27 +3040,28 @@ String LogoManager::detectImageExtension(const String& path) {
   uint8_t header[12]{};
   const size_t read = file.read(header, sizeof(header));
   file.close();
-  if (read >= 8 && header[0] == 0x89 && header[1] == 'P' &&
-      header[2] == 'N' && header[3] == 'G')
-    return ".png";
-  if (read >= 3 && header[0] == 0xFF && header[1] == 0xD8 &&
-      header[2] == 0xFF)
-    return ".jpg";
-  if (read >= 2 && header[0] == 'B' && header[1] == 'M') return ".bmp";
-  if (read >= 12 && header[0] == 'R' && header[1] == 'I' &&
-      header[2] == 'F' && header[3] == 'F' && header[8] == 'W' &&
-      header[9] == 'E' && header[10] == 'B' && header[11] == 'P')
-    return ".webp";
-  return "";
+  return imageExtensionFromHeader(header, read);
 }
 
 bool LogoManager::makeThumbnail(const String& imagePath, const String& key,
                                 String& thumbnail) {
   thumbnail = thumbnailPath(key);
-  if (validThumbnail(thumbnail)) return true;
+  const bool memoryImage = imagePath == kAlbumMemoryImagePath;
+  if (validThumbnail(thumbnail)) {
+    if (memoryImage) gAlbumImage.clear();
+    return true;
+  }
 
   PsramBytes bytes;
-  if (!loadFileBytes(imagePath, bytes)) return false;
+  if (memoryImage) {
+    bytes.data = gAlbumImage.data;
+    bytes.length = gAlbumImage.length;
+    gAlbumImage.data = nullptr;
+    gAlbumImage.length = 0;
+    if (!bytes.data) return false;
+  } else if (!loadFileBytes(imagePath, bytes)) {
+    return false;
+  }
   int sourceWidth = 0;
   int sourceHeight = 0;
   int channels = 0;
@@ -2939,6 +3137,15 @@ bool LogoManager::makeThumbnail(const String& imagePath, const String& key,
     return false;
   }
 
+  static_assert(memory_artwork::kPixelBytes ==
+                    static_cast<size_t>(kThumbnailSize) * kThumbnailSize * 2,
+                "album thumbnail size mismatch");
+  if (key.startsWith("album:")) {
+    // Az album-borító dalonként cserélődik: PSRAM-ban tartjuk, flash-írás
+    // (és vele a dekóder megakasztása) nélkül.
+    return memory_artwork::store(thumbnail, pixels);
+  }
+
   const String temporary = thumbnail + ".tmp";
   if (LittleFS.exists(temporary)) LittleFS.remove(temporary);
   File output = LittleFS.open(temporary, FILE_WRITE);
@@ -2956,10 +3163,12 @@ bool LogoManager::makeThumbnail(const String& imagePath, const String& key,
   bool success = output.write(header, sizeof(header)) == sizeof(header);
   size_t written = 0;
   while (success && written < pixelBytes) {
-    const size_t chunk = min<size_t>(4096, pixelBytes - written);
+    const size_t chunk =
+        min<size_t>(kArtworkFlashWritePaceBytes, pixelBytes - written);
     success = output.write(pixels + written, chunk) == chunk;
     written += chunk;
-    vTaskDelay(1);
+    output.flush();
+    vTaskDelay(pdMS_TO_TICKS(kArtworkFlashWritePauseMs));
   }
   output.flush();
   output.close();
@@ -2986,6 +3195,7 @@ void LogoManager::compactCache(const String& imagePath,
 void LogoManager::purgeCachedArtwork(const String& key) {
   if (key.isEmpty() || !key.startsWith("album:")) return;
   const String stem = cacheStem(key);
+  memory_artwork::remove(stem + ".sr565");
   const char* extensions[] = {
       ".sr565", ".tmp", ".png", ".jpg", ".jpeg", ".bmp", ".webp", ".payload",
       ".emb"};
@@ -3012,7 +3222,9 @@ void LogoManager::enforceCacheBudget(const String& keepPath) {
     const String path = file.path();
     const size_t size = file.size();
     file.close();
-    if (path == keepPath || path.endsWith(".tmp")) continue;
+    if (path == keepPath || path.endsWith(".tmp") ||
+        path == gProtectedStationThumbnail)
+      continue;
     if (LittleFS.remove(path)) total = total > size ? total - size : 0;
   }
   root.close();

@@ -147,6 +147,7 @@ class LogoManager {
   uint32_t taskStartedAt_{0};
   String taskLabel_;
   bool taskBusyLogged_{false};
+  uint32_t reserveLoggedAt_{0};
 
   bool resultReady_{false};
   bool resultSuccess_{false};
