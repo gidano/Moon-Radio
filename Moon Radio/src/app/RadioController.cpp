@@ -31,8 +31,13 @@ constexpr uint32_t kWebServiceMs = 25;
 constexpr uint32_t kStreamInitialGraceMs = 20000;
 constexpr uint32_t kStreamStallRecoverMs = 12000;
 constexpr uint32_t kStreamRecoveryCooldownMs = 30000;
-constexpr uint32_t kStartupPrebufferVisibleMs = 3000;
-constexpr uint32_t kStartupPrebufferTotalMs = 5000;
+// Állomásváltás / újrakapcsolódás után a belső RAM-ot és TLS-t használó
+// háttérmunka (logó-thumbnail, borító, metaadat, időjárás) csak akkor indul,
+// ha a stream már ennyi ideje stabilan szól.  A TLS-es audio (esp-aes DMA)
+// így nem marad belső memória nélkül a kézfogás alatt.  Ha a stream nem
+// indul el, legfeljebb a második értékig várunk.
+constexpr uint32_t kBackgroundAfterStreamReadyMs = 3000;
+constexpr uint32_t kBackgroundMaxHoldMs = 15000;
 // A dekóder saját "slow stream" jelzése után ennyi ideig nem indul új
 // borítóhálózat. Ez nem változtatja meg a borító indítási RAM- vagy
 // pufferküszöbeit.
@@ -264,17 +269,9 @@ bool RadioController::begin() {
   refreshDisplay(true);
   display_.loop();
   if (wifiManager_.connected() && stationStore_.count() > 0) {
-    if (connectCurrentStation()) {
-      // While the known bootlogo stays on screen, feed the normal stream
-      // reader continuously.  This runs before weather, metadata and artwork
-      // work can compete for Wi-Fi/RAM, and is display-profile independent.
-      const uint32_t prebufferStartedAt = millis();
-      startupPrebufferUntil_ = prebufferStartedAt + kStartupPrebufferTotalMs;
-      while (millis() - prebufferStartedAt < kStartupPrebufferVisibleMs) {
-        audio_.loop();
-        display_.loop();
-      }
-    }
+    // A puffert az AudioEngine saját stream-olvasó taskja tölti, ezért a
+    // bootlogót nem kell mesterségesen kitartani.
+    connectCurrentStation();
   }
   display_.finishStartupBootLogo();
   refreshDisplay(true);
@@ -354,14 +351,11 @@ void RadioController::loop() {
   const size_t bufferFilled = audio_.bufferFilled();
   const bool running = audio_.running();
   const bool wifiConnected = wifiManager_.connected();
-  const bool startupPrebufferActive =
-      startupPrebufferUntil_ &&
-      static_cast<int32_t>(now - startupPrebufferUntil_) < 0;
-  // The first five seconds belong exclusively to the stream reader.  The
-  // bootlogo itself is visible for three seconds; the dashboard may appear
-  // for the remaining two, but weather/metadata/artwork must not compete for
-  // Wi-Fi or internal heap before the initial reserve is complete.
-  if (!startupPrebufferActive) {
+  const bool backgroundAllowed =
+      !running || audio_.paused() ||
+      audio_.streamReadyForMs() >= kBackgroundAfterStreamReadyMs ||
+      audio_.msSinceConnect() >= kBackgroundMaxHoldMs;
+  if (backgroundAllowed) {
     // A MyOnlineRadio HTTPS-címlekérés közben ne induljon egy második, szintén
     // hálózatot és belső RAM-ot használó borítófeladat.
     if (!metadata_.busy() && now - lastArtworkAt_ >= kArtworkServiceMs) {
