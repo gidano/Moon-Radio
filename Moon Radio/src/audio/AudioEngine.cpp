@@ -14,6 +14,27 @@ constexpr uint8_t kDisplayVolumeMax = 21;
 constexpr uint8_t kMaleksmVolumeMax = 254;
 constexpr const char* kGoogleTtsTempPath = "/clock_tts.mp3";
 
+// A hálózati stream olvasása (Audio::loop) saját taskban fut, a fő loop
+// (LVGL, PNG-dekódolás, HTTP/TLS borító-, metaadat- és időjáráskérések,
+// webszerver) blokkolásától függetlenül.  Ugyanaz az elv, mint a jRadio
+// "radio_decode" taskjánál: a puffer töltése soha nem vár a kijelzőre.
+// A fő loopTask prioritása 1; ez fölötte fut, ugyanazon a magon, így a
+// hosszú UI-munkát rövid időre megszakítja, majd vTaskDelay-jel visszaadja.
+#ifndef AUDIO_STREAM_TASK_CORE
+#define AUDIO_STREAM_TASK_CORE 1
+#endif
+#ifndef AUDIO_STREAM_TASK_PRIORITY
+#define AUDIO_STREAM_TASK_PRIORITY 3
+#endif
+#ifndef AUDIO_STREAM_TASK_STACK_BYTES
+// A stack a PSRAM-ban van (mint a jRadio radio_decode taskjánál), így a
+// szűkös belső heapből (logó-, borítótaskok) semmit nem vesz el.  Ez a task
+// nem nyúl a flash-hez: a helyi fájlos TTS-t a fő loop olvassa.
+#define AUDIO_STREAM_TASK_STACK_BYTES 12288
+#endif
+// Eddig a töltöttségig korlátlan sebességgel töltjük a puffert.
+constexpr size_t kStreamFastFillBytes = 128U * 1024U;
+
 #ifndef MUTE_PIN
 #define MUTE_PIN 255
 #endif
@@ -187,10 +208,15 @@ bool downloadGoogleTtsMp3(const String& speech, const String& language) {
 
 AudioEngine::AudioEngine() {
   metadataMutex_ = xSemaphoreCreateMutex();
+  audioMutex_ = xSemaphoreCreateMutex();
   instance_ = this;
 }
 
 AudioEngine::~AudioEngine() {
+  if (streamTask_) {
+    vTaskDeleteWithCaps(streamTask_);
+    streamTask_ = nullptr;
+  }
   if (instance_ == this) instance_ = nullptr;
   if (artworkQueue_) {
     vQueueDelete(artworkQueue_);
@@ -201,11 +227,15 @@ AudioEngine::~AudioEngine() {
     logQueue_ = nullptr;
   }
   if (metadataMutex_) vSemaphoreDelete(metadataMutex_);
+  if (audioMutex_) vSemaphoreDelete(audioMutex_);
 }
 
 bool AudioEngine::begin(uint8_t volume) {
+  mainTask_ = xTaskGetCurrentTaskHandle();
   Audio::audio_info_callback = audioInfoCallback;
-  logQueue_ = xQueueCreate(8, sizeof(DeferredLog));
+  // A stream-olvasó task minden szöveges eseményt ide ad át, ezért a sor
+  // kicsit hosszabb, hogy egy címváltás ne szoruljon ki a naplósorok miatt.
+  logQueue_ = xQueueCreate(16, sizeof(DeferredLog));
   if (!logQueue_) {
     Serial.println("[audio] Naplosor letrehozasi hiba");
   }
@@ -221,13 +251,18 @@ bool AudioEngine::begin(uint8_t volume) {
   // ennek ellenére minden egyes PCM mintán három lebegőpontos biquadot
   // számolna, ezért sík hangszínnél teljesen kihagyjuk.
   audio_.settings.IIR_FILTER = false;
-  // A normál MP3/AAC adatfolyam dekódolása csak egy használható induló
-  // tartalék után indulhat.  Ez a Maleksm HLS-előtöltési elvét alkalmazza
-  // a hagyományos streamre is, de 5 mp után a gyengébb adó sem marad néma.
-  // Ez minden kijelzőprofilt azonosan véd; a megjelenítő saját útjához nem
-  // nyúl, csak a közös audio dekóder indulási feltételét állítja.
-  audio_.settings.BUFFER_TRESHOLD_WEBSTREAM = 200U * 1024U;
-  audio_.settings.BUFFER_TRESHOLD_WEBSTREAM_TIMEOUT_MS = 5000U;
+  // Nagyobb I2S DMA tartalék: 32 helyett 48 x 256 frame = ~279 ms (44,1 kHz)
+  // a korábbi ~186 ms helyett, +16 KiB belső DMA RAM árán (ennyi az LVGL
+  // PSRAM-ba költözésével bőven felszabadult).  A flash-írások (cache tiltás)
+  // és a nehéz HE-AAC/SBR dekódolás pillanatnyi elakadásait ez hidalja át,
+  // mielőtt a hang akadna.  setPinout() előtt kell beállítani.
+  audio_.settings.DMA_DESC_NUM = 48;
+  // Kis induló tartalék: a puffert innentől a külön stream-olvasó task
+  // folyamatosan tölti, így nem kell másodpercekig némán várni a 200 KiB-os
+  // előtöltésre.  Ha a szerver nem küld kezdő löketet, legfeljebb 1,5 mp
+  // után a minimális (két frame-es) tartalékkal is elindul.
+  audio_.settings.BUFFER_TRESHOLD_WEBSTREAM = 32U * 1024U;
+  audio_.settings.BUFFER_TRESHOLD_WEBSTREAM_TIMEOUT_MS = 1500U;
 #ifdef I2S_MCLK
   if (!audio_.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT, I2S_MCLK)) {
 #else
@@ -260,6 +295,15 @@ bool AudioEngine::begin(uint8_t volume) {
     stateCode_ = "KQ!";
     return false;
   }
+  if (!streamTask_ &&
+      xTaskCreatePinnedToCoreWithCaps(
+          streamTaskEntry, "audio-stream", AUDIO_STREAM_TASK_STACK_BYTES, this,
+          AUDIO_STREAM_TASK_PRIORITY, &streamTask_, AUDIO_STREAM_TASK_CORE,
+          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) != pdPASS) {
+    streamTask_ = nullptr;
+    // Tartalék: a fő loop olvas tovább, mint korábban.
+    Serial.println("[audio] Stream-olvaso task letrehozasi hiba");
+  }
   initialized_ = true;
   stateCode_ = "KESZ";
   statusText_ = "Audio kesz";
@@ -268,7 +312,10 @@ bool AudioEngine::begin(uint8_t volume) {
 }
 
 void AudioEngine::loop() {
-  audio_.loop();
+  if ((!streamTask_ || localFilePlayback_) && lockAudio(0)) {
+    audio_.loop();
+    unlockAudio();
+  }
   processDeferredLogs();
 
   if (audio_.inBufferFilled() > 0) {
@@ -301,9 +348,13 @@ bool AudioEngine::connect(const String& url) {
   currentUrl_ = url;
   suppressEndOfFile_ = true;
   connectStartedAt_ = millis();
+  streamReadyAt_ = 0;
   statusText_ = "Kapcsolódás...";
   stateCode_ = "TCP";
+  lockAudio();
+  localFilePlayback_ = false;
   const bool connected = audio_.connecttohost(currentUrl_.c_str());
+  unlockAudio();
   tcpConnected_ = connected;
   connecting_ = connected;
   statusText_ = connected ? "HTTP kapcsolat létrejött"
@@ -335,10 +386,17 @@ bool AudioEngine::speak(const String& text, const String& lang) {
   tcpConnected_ = false;
   stateCode_ = "TTS";
   statusText_ = "Google TTS...";
+  connectStartedAt_ = millis();
+  streamReadyAt_ = 0;
   suppressEndOfFile_ = true;
   const bool downloaded = downloadGoogleTtsMp3(speech, language);
-  const bool connected =
-      downloaded && audio_.connecttoFS(LittleFS, kGoogleTtsTempPath);
+  bool connected = false;
+  if (downloaded) {
+    lockAudio();
+    localFilePlayback_ = true;
+    connected = audio_.connecttoFS(LittleFS, kGoogleTtsTempPath);
+    unlockAudio();
+  }
   tcpConnected_ = connected;
   connecting_ = connected;
   statusText_ = connected ? "TTS lejátszás" : "TTS hiba";
@@ -353,12 +411,16 @@ bool AudioEngine::speak(const String& text, const String& lang) {
 void AudioEngine::stop() {
   setOutputEnabled(false);
   suppressEndOfFile_ = true;
+  lockAudio();
   audio_.setDefaults();
+  localFilePlayback_ = false;
+  unlockAudio();
   suppressEndOfFile_ = false;
   paused_ = false;
   connecting_ = false;
   commandQueued_ = false;
   tcpConnected_ = false;
+  streamReadyAt_ = 0;
   currentUrl_ = "";
   if (metadataMutex_ && xSemaphoreTake(metadataMutex_, pdMS_TO_TICKS(30))) {
     streamTitle_ = "";
@@ -371,7 +433,10 @@ void AudioEngine::stop() {
 }
 
 bool AudioEngine::togglePause() {
-  if (!audio_.pauseResume()) return false;
+  lockAudio();
+  const bool toggled = audio_.pauseResume();
+  unlockAudio();
+  if (!toggled) return false;
   paused_ = !paused_;
   setOutputEnabled(!paused_);
   stateCode_ = paused_ ? "STOP" : "PLAY";
@@ -458,6 +523,15 @@ bool AudioEngine::consumeSlowStreamWarning() {
   return true;
 }
 
+uint32_t AudioEngine::streamReadyForMs() const {
+  const uint32_t readyAt = streamReadyAt_;
+  return readyAt ? millis() - readyAt : 0;
+}
+
+uint32_t AudioEngine::msSinceConnect() const {
+  return millis() - connectStartedAt_;
+}
+
 bool AudioEngine::takeArtworkEvent(ArtworkEvent& event) {
   return artworkQueue_ &&
          xQueueReceive(artworkQueue_, &event, 0) == pdTRUE;
@@ -477,6 +551,42 @@ uint32_t AudioEngine::audioCurrentTime() { return audio_.getAudioCurrentTime(); 
 
 uint32_t AudioEngine::audioStackFreeWords() {
   return initialized_ ? audio_.getHighWatermark() : 0;
+}
+
+bool AudioEngine::lockAudio(TickType_t timeout) {
+  return !audioMutex_ || xSemaphoreTake(audioMutex_, timeout) == pdTRUE;
+}
+
+void AudioEngine::unlockAudio() {
+  if (audioMutex_) xSemaphoreGive(audioMutex_);
+}
+
+void AudioEngine::streamTaskEntry(void* context) {
+  static_cast<AudioEngine*>(context)->streamTask();
+}
+
+void AudioEngine::streamTask() {
+  for (;;) {
+    // Rövid várakozás: ha a fő loop éppen kapcsolódik/leállít, a következő
+    // körben újrapróbáljuk, a puffer addig is a dekóder rendelkezésére áll.
+    if (!localFilePlayback_ && lockAudio(pdMS_TO_TICKS(20))) {
+      if (!localFilePlayback_) audio_.loop();
+      unlockAudio();
+    }
+    // Amíg kevés a tartalék, minden ms-ban olvasunk.  Utána ritkábban: a
+    // korlátlan sebességű feltöltés (akár MB/s) a 0. magon futó Wi-Fi/lwIP
+    // feladatokat terheli, és elveszi a CPU-t a dekódertől, ami a nehéz
+    // HE-AAC-nál induláskori döcögést okoz, amíg a puffer meg nem telik.
+    // Egy olvasás legfeljebb a TCP-ablaknyi (5760 byte), így 10 ms-onként
+    // ~560 KiB/s, 25 ms-onként ~225 KiB/s jöhet: a 1,5 Mbit/s-os FLAC-nál is
+    // bőven gyorsabb a lejátszásnál, a puffer tehát tele marad.
+    const size_t total = audio_.getInBufferSize();
+    const size_t filled = audio_.inBufferFilled();
+    TickType_t delayTicks = 1;
+    if (total && filled >= kStreamFastFillBytes)
+      delayTicks = pdMS_TO_TICKS(filled * 2 >= total ? 25 : 10);
+    vTaskDelay(delayTicks);
+  }
 }
 
 void AudioEngine::processDeferredLogs() {
@@ -519,17 +629,19 @@ uint8_t AudioEngine::toInternalVolume(uint8_t displayVolume) {
 
 void AudioEngine::audioInfoCallback(Audio::msg_t message) {
   if (!instance_) return;
-  // The decoder PeriodicTask runs on core 0.  It must not run Serial,
-  // String/UTF-8 work or mutex waits from a deep MP3 decode call chain;
+  // The decoder PeriodicTask and the stream reader task must not run Serial,
+  // String/UTF-8 work or mutex waits from a deep decode/read call chain;
   // copy every textual event to the Arduino loop task instead.  Artwork image
   // vectors retain a different payload and continue through their small,
   // copy-only queue path below.
-  const bool fromDecoderCore = xPortGetCoreID() == 0;
+  const bool fromAudioTask =
+      !instance_->mainTask_ ||
+      xTaskGetCurrentTaskHandle() != instance_->mainTask_;
   const bool deferTextEvent =
       message.e == Audio::evt_info || message.e == Audio::evt_log ||
       message.e == Audio::evt_streamtitle || message.e == Audio::evt_bitrate ||
       message.e == Audio::evt_id3data || message.e == Audio::evt_icylogo;
-  if (message.e == Audio::evt_log || (fromDecoderCore && deferTextEvent)) {
+  if (message.e == Audio::evt_log || (fromAudioTask && deferTextEvent)) {
     instance_->deferAudioLog(message.e, message.msg);
     return;
   }
@@ -569,6 +681,16 @@ void AudioEngine::handleAudioInfo(Audio::msg_t message) {
   if (message.e == Audio::evt_info || message.e == Audio::evt_log) {
     if (strstr(text, "slow stream") != nullptr) {
       slowStreamWarning_ = true;
+    }
+    if (strstr(text, "stream ready") != nullptr) {
+      streamReadyAt_ = millis();
+      if (!streamReadyAt_) streamReadyAt_ = 1;
+    } else if (strstr(text, "reconnecting") != nullptr ||
+               strstr(text, "Stream lost") != nullptr) {
+      // A könyvtár saját újrakapcsolódása (pl. http->https átirányítás) új
+      // TLS-kézfogást jelent: a háttérmunka újra várjon.
+      streamReadyAt_ = 0;
+      connectStartedAt_ = millis();
     }
     Serial.printf("[audio] %s\n", text);
     if (metadataMutex_ &&

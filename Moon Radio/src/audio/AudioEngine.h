@@ -43,6 +43,12 @@ class AudioEngine {
   // használhatja. A lejátszás működésébe nem avatkozik be.
   bool consumeSlowStreamWarning();
   bool takeArtworkEvent(ArtworkEvent& event);
+  // Mióta szól stabilan az aktuális stream ("stream ready" óta, ms; 0, ha
+  // még nem kész vagy a könyvtár újrakapcsolódik), illetve mióta indult az
+  // utolsó kapcsolódás.  A belső RAM-ot igénylő háttérmunkák (logó, borító,
+  // metaadat, időjárás) ezek alapján várják meg a TLS-kézfogás végét.
+  uint32_t streamReadyForMs() const;
+  uint32_t msSinceConnect() const;
 
   size_t bufferFilled();
   size_t bufferFree();
@@ -59,6 +65,10 @@ class AudioEngine {
   };
 
   static void audioInfoCallback(Audio::msg_t message);
+  static void streamTaskEntry(void* context);
+  void streamTask();
+  bool lockAudio(TickType_t timeout = portMAX_DELAY);
+  void unlockAudio();
   void processDeferredLogs();
   void deferAudioLog(Audio::event_t event, const char* text);
   void handleAudioInfo(Audio::msg_t message);
@@ -72,6 +82,12 @@ class AudioEngine {
   QueueHandle_t artworkQueue_{nullptr};
   QueueHandle_t logQueue_{nullptr};
   mutable SemaphoreHandle_t metadataMutex_{nullptr};
+  // Az Audio objektum állapotát módosító hívások (loop, connecttohost,
+  // setDefaults, pauseResume) kizárása a stream-olvasó task és a fő loop
+  // között.
+  SemaphoreHandle_t audioMutex_{nullptr};
+  TaskHandle_t streamTask_{nullptr};
+  TaskHandle_t mainTask_{nullptr};
   String streamTitle_;
   String artist_;
   String title_;
@@ -89,7 +105,11 @@ class AudioEngine {
   volatile bool commandQueued_{false};
   volatile bool connectAttempted_{false};
   volatile bool tcpConnected_{false};
+  // Helyi fájl (TTS) lejátszásakor a flash-olvasás nem futhat a PSRAM-stackű
+  // stream-taskban, ezért ilyenkor a fő loop hívja az Audio::loop()-ot.
+  volatile bool localFilePlayback_{false};
   bool outputEnabled_{false};
   String currentUrl_;
   uint32_t connectStartedAt_{0};
+  volatile uint32_t streamReadyAt_{0};
 };
