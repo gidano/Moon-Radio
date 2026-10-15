@@ -1,0 +1,49 @@
+/* Freenove FNK0104S 4.0 inch / 480x320 configuration */
+
+#pragma once
+
+#ifndef ARDUINO_ESP32S3_DEV
+    #define ARDUINO_ESP32S3_DEV
+#endif
+
+#define LANGUAGE HU
+#define NAMEDAYS_FILE HU
+
+/* ST7796 SPI display; the firmware rotates this to 480x320 landscape. */
+#define DSP_MODEL DSP_FNK0104S
+#define TFT_SCK   12
+#define TFT_MOSI  11
+#define TFT_CS    10
+#define TFT_DC    46
+#define TFT_RST   -1
+#define BRIGHTNESS_PIN 45
+
+/* FT6336U capacitive touch controller. */
+#define TOUCH_ENABLED 1
+#define TS_MODEL TS_MODEL_FT6X36
+#define TS_SDA 16
+#define TS_SCL 15
+#define TS_RST 18
+#define TS_INT 17
+
+/* SD card */
+#define SDC_CS    39
+#define SD_SPI_HOST FSPI
+#define SD_SPIPINS 12, 13, 11, SDC_CS
+#define SDSPISPEED 4000000
+
+/* PCM5102A recommendation: DIN=38, BCK=21, LCK/WS=47. */
+#define I2S_DOUT 38
+#define I2S_BCLK 21
+#define I2S_LRC  47
+
+/* Encoder: A/S1=4, B/S2=6, push button=5. */
+#define ENC_BTNR 4
+#define ENC_BTNL 6
+#define ENC_BTNB 5
+
+/* Album cover lookup */
+#define USE_LASTFM_COVER
+#define LASTFM_API_KEY "9b120bd8ad9b0cf43f7918f284bcb9d6"
+
+#include "options_internal.h"
