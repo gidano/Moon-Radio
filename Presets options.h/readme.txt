@@ -12,6 +12,7 @@ Ezeket én a 15, 17 pin valamelyikén szoktam használni.
 - options.h_ILI9488_TS azaz (T)ouch (S)creen
 - options.h_ILI9488_noTS azaz érintőképernyő nélkül
 - options.h_ST7796_noTS azaz érintőképernyő nélkül
+- options.h_FNK0104S a Freenove FFNK0104S modulhoz
 több kijelzőt nem tudtam konfigurálni mert nálam nincs egyéb más 480x320-as kijelző
 
 Amennyiben a rádiólogó helyén aktuálisan hallgatott zenék albumborítóját is szeretnéd látni,
@@ -40,6 +41,7 @@ I usually use one of pins 15 or 17 for these.
 - options.h_ILI9488_TS, i.e., (T)ouch (S)creen
 - options.h_ILI9488_noTS, i.e., without a touchscreen
 - options.h_ST7796_noTS, i.e., without a touchscreen
+- options.h_FNK0104S for the Freenove FFNK0104S module
 I wasn’t able to configure more displays because I don’t have any other 480x320 displays
 
 If you’d like to see the album cover of the song currently playing in place of the radio logo,
