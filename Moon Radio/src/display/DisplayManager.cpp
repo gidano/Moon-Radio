@@ -62,11 +62,21 @@ bool DisplayManager::begin(const NowPlayingActions& actions) {
   // boot and causes the visible orientation flicker.
 #elif DISPLAY_PROFILE_AXS15231B
   device_.setRotation(screenFlipped_ ? 2 : 0);
+#elif DISPLAY_PROFILE_FNK0104S
+  // The Freenove FNK0104S is 320x480 native and needs the opposite
+  // landscape MADCTL direction from the generic ST7796 profile.
+  device_.setRotation(screenFlipped_ ? 1 : 3);
 #else
   device_.setRotation(screenFlipped_ ? 3 : 1);
 #endif
 #if !(DISPLAY_PROFILE_AXS15231B && AXS_FACTORY_DIRECT_LVGL)
+#if DISPLAY_PROFILE_FNK0104S
+  // Freenove's reference setup uses TFT_INVERSION_ON.  The web option
+  // remains user-facing: false means the panel's normal (inversion-on) mode.
+  device_.invertDisplay(!colorInverted_);
+#else
   device_.invertDisplay(colorInverted_);
+#endif
 #endif
   device_.setColorDepth(16);
   device_.setSwapBytes(true);
@@ -391,7 +401,11 @@ void DisplayManager::setColorInverted(bool inverted) {
   device_.setAxsFactoryColorInverted(colorInverted_);
   if (lvDisplay_) lv_obj_invalidate(lv_screen_active());
 #else
+#if DISPLAY_PROFILE_FNK0104S
+  device_.invertDisplay(!colorInverted_);
+#else
   device_.invertDisplay(colorInverted_);
+#endif
 #endif
 }
 
@@ -413,6 +427,8 @@ void DisplayManager::setScreenFlipped(bool flipped) {
   screenFlipped_ = flipped;
 #if DISPLAY_PROFILE_AXS15231B
   device_.setRotation(screenFlipped_ ? 2 : 0);
+#elif DISPLAY_PROFILE_FNK0104S
+  device_.setRotation(screenFlipped_ ? 1 : 3);
 #else
   device_.setRotation(screenFlipped_ ? 3 : 1);
 #endif
