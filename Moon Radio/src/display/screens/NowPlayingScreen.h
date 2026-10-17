@@ -57,6 +57,7 @@ class NowPlayingScreen {
   bool bufferBarVisible() const;
   void setDiagnosticsVisible(bool visible);
   bool diagnosticsVisible() const;
+  void setBootOverlayActive(bool active);
   void loop(uint32_t now);
   bool visualizerActive() const;
 
@@ -164,6 +165,7 @@ class NowPlayingScreen {
   String lastNamedayText_;
   String lastWeatherSummary_;
   bool backgroundEnabled_{false};
+  bool bootOverlayActive_{false};
   uint8_t backgroundOpacity_{255};
   uint8_t currentVolume_{8};
   uint8_t currentBufferPercent_{255};

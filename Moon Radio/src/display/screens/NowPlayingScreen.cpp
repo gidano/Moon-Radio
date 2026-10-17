@@ -841,6 +841,15 @@ void NowPlayingScreen::update(const AudioSnapshot& audio,
   updateDiagnostics(diagnostics, bufferText);
 }
 
+void NowPlayingScreen::setBootOverlayActive(bool active) {
+  bootOverlayActive_ = active;
+  if (active) {
+    if (backgroundImage_) lv_obj_add_flag(backgroundImage_, LV_OBJ_FLAG_HIDDEN);
+    if (moonImage_) lv_obj_add_flag(moonImage_, LV_OBJ_FLAG_HIDDEN);
+    if (moonHost_) lv_obj_add_flag(moonHost_, LV_OBJ_FLAG_HIDDEN);
+  }
+}
+
 void NowPlayingScreen::updateBufferBar(const AudioSnapshot& audio) {
   if (!bufferBarTrack_ || !bufferBarFill_) return;
   const bool visible =
@@ -1183,6 +1192,11 @@ void NowPlayingScreen::updateClockIpVisibility(uint32_t now) {
 
 void NowPlayingScreen::updateMoonPhase(const tm& localTime) {
   if (!moonHost_ || !moonImage_) return;
+  if (bootOverlayActive_) {
+    lv_obj_add_flag(moonImage_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(moonHost_, LV_OBJ_FLAG_HIDDEN);
+    return;
+  }
   const int phase = moonPhaseIndex(localTime);
   if (phase == lastMoonPhase_ &&
       !lv_obj_has_flag(moonImage_, LV_OBJ_FLAG_HIDDEN)) {
