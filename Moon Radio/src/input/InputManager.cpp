@@ -9,6 +9,10 @@ constexpr int8_t kQuadratureTable[16] = {
 };
 constexpr uint32_t kButtonDebounceMs = 35;
 constexpr uint32_t kButtonLongPressMs = 850;
+// A jelenlegi encoder mechanikai sorrendje a készülékben fordított a
+// dekóder által feltételezetthez képest. A pinekhez nem kell nyúlni: a
+// quadrature-jel előjelét fordítjuk meg egyetlen helyen.
+constexpr bool kReverseEncoderDirection = true;
 
 uint8_t readAB(uint8_t pinA, uint8_t pinB) {
   return (digitalRead(pinA) ? 2U : 0U) | (digitalRead(pinB) ? 1U : 0U);
@@ -66,7 +70,9 @@ void InputManager::updateEncoder(Encoder& encoder, void (*left)(void*),
   const uint8_t currentAB = readAB(encoder.pinA, encoder.pinB);
   if (currentAB != encoder.previousAB) {
     const uint8_t transition = (encoder.previousAB << 2) | currentAB;
-    encoder.accumulator += kQuadratureTable[transition & 0x0F];
+    const int8_t transitionDelta = kQuadratureTable[transition & 0x0F];
+    encoder.accumulator += kReverseEncoderDirection ? -transitionDelta
+                                                    : transitionDelta;
     encoder.previousAB = currentAB;
 
     if (encoder.accumulator <= -4) {
