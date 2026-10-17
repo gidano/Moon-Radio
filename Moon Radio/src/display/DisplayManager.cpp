@@ -14,6 +14,7 @@ namespace {
 
 constexpr uint32_t kStationSelectDelayMs = 3000;
 constexpr int32_t kVerticalSwipeThreshold = 36;
+constexpr int32_t kStationScrollStep = 30;
 #if DISPLAY_PROFILE_AXS15231B
 #ifndef AXS_LVGL_RUN_INTERVAL_MS
 #define AXS_LVGL_RUN_INTERVAL_MS 50
@@ -167,6 +168,7 @@ bool DisplayManager::begin(const NowPlayingActions& actions) {
 
   presets_.begin();
   screen_.create(fonts_, actions);
+  screen_.setBootOverlayActive(true);
   configureScreenNativeHooks();
   screen_.setVisualizerMode(visualizerMode_);
   screen_.setHeaderIpVisible(headerIpVisible_);
@@ -182,7 +184,10 @@ bool DisplayManager::begin(const NowPlayingActions& actions) {
   return true;
 }
 
-void DisplayManager::finishStartupBootLogo() { releaseBootLogo(); }
+void DisplayManager::finishStartupBootLogo() {
+  releaseBootLogo();
+  screen_.setBootOverlayActive(false);
+}
 
 void DisplayManager::loop() {
   const uint32_t now = millis();
@@ -554,6 +559,16 @@ bool DisplayManager::moveStationSelector(int8_t delta) {
   const size_t count = actions_.stationCount(actions_.context);
   if (count == 0) return false;
 
+  const uint32_t now = millis();
+  const int8_t direction = delta > 0 ? 1 : -1;
+  if (selectorLastMoveAt_ != 0 && now - selectorLastMoveAt_ < 140 &&
+      direction == selectorLastMoveDirection_ &&
+      selectorArcNextDurationMs_ == 220) {
+    selectorArcNextDurationMs_ = 90;
+  }
+  selectorLastMoveAt_ = now;
+  selectorLastMoveDirection_ = direction;
+
   int32_t selected = static_cast<int32_t>(lv_roller_get_selected(selectorRoller_));
   selected += delta;
   if (selected < 0) selected = 0;
@@ -567,6 +582,10 @@ bool DisplayManager::moveStationSelector(int8_t delta) {
 
   lv_roller_set_selected(selectorRoller_, static_cast<uint32_t>(selected),
                          LV_ANIM_OFF);
+
+  const uint16_t animationDuration = selectorArcNextDurationMs_;
+  selectorArcNextDurationMs_ = 220;
+  animateStationSelectorArc(selected, animationDuration);
   selectorPendingIndex_ = selected;
   selectorSelectAt_ = millis() + kStationSelectDelayMs;
   selectorCountdown_ = 0;
@@ -740,11 +759,31 @@ void DisplayManager::readTouch(lv_indev_t*, lv_indev_data_t* data) {
       instance_->touchStartX_ = x;
       instance_->touchStartY_ = y;
       instance_->lastSwipeX_ = x;
+      instance_->lastSelectorTouchY_ = y;
+      instance_->selectorTouchStartAt_ = millis();
     }
 
     const int32_t totalX = static_cast<int32_t>(x) - instance_->touchStartX_;
     const int32_t totalY = static_cast<int32_t>(y) - instance_->touchStartY_;
-    if (!instance_->selectorActive_ && !instance_->presetActive_) {
+    if (instance_->selectorActive_ && !instance_->presetActive_) {
+      // A roller saját pixel-alapú görgetése kis mozdulatokra is könnyen
+      // sort vált. A választót szándékosan egyetlen, nagyobb lépésű
+      // érintésvezérléssel kezeljük.
+      const int32_t movement = static_cast<int32_t>(y) -
+                               instance_->lastSelectorTouchY_;
+      const int8_t steps = static_cast<int8_t>(movement / kStationScrollStep);
+      if (steps != 0) {
+        const uint32_t elapsed = millis() - instance_->selectorTouchStartAt_;
+        const int32_t totalDistance = abs(totalY);
+        // A gyors, nagyobb seprésnél rövidebb animációt használunk. A
+        // finom mozdulat továbbra is pontosan egy sort léptet.
+        const bool fastSweep = elapsed > 0 &&
+                               (totalDistance * 1000L) / elapsed >= 450;
+        instance_->selectorArcNextDurationMs_ = fastSweep ? 90 : 220;
+        instance_->moveStationSelector(static_cast<int8_t>(-steps));
+        instance_->lastSelectorTouchY_ += steps * kStationScrollStep;
+      }
+    } else if (!instance_->selectorActive_ && !instance_->presetActive_) {
       if (!instance_->volumeSwipe_ && !instance_->verticalSwipe_ &&
           abs(totalY) >= kVerticalSwipeThreshold &&
           abs(totalY) > abs(totalX)) {
@@ -883,6 +922,148 @@ void DisplayManager::showStationSelector() {
   if (selected >= count) selected = 0;
   lv_roller_set_selected(selectorRoller_, static_cast<uint32_t>(selected),
                          LV_ANIM_OFF);
+  selectorArcPosition100_ = static_cast<int32_t>(selected) * 100;
+  selectorArcTargetIndex_ = static_cast<int32_t>(selected);
+
+  // A görgetés és az érintés kezelését továbbra is az LVGL roller végzi.
+  // A saját szöveges réteg csak a látványt rajzolja körív-szerűen fölé.
+  lv_obj_set_style_bg_opa(selectorRoller_, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_bg_opa(selectorRoller_, LV_OPA_TRANSP, LV_PART_SELECTED);
+  lv_obj_set_style_border_width(selectorRoller_, 0, 0);
+  lv_obj_set_style_text_opa(selectorRoller_, LV_OPA_TRANSP, 0);
+  lv_obj_set_style_text_opa(selectorRoller_, LV_OPA_TRANSP, LV_PART_SELECTED);
+  lv_obj_clear_flag(selectorRoller_, LV_OBJ_FLAG_SCROLLABLE);
+
+  // Részleges, dekoratív körív a kijelző jobb oldalán. A középpont a
+  // kijelző bal oldalán kívülre esik, ezért a jobb oldali, ')' alakú rész
+  // marad látható, ahogy a látványterven.
+  // Az ív végei is fokozatosan halványulnak, mint a fókuszvonalaké. A
+  // szegmensek átfedés nélkül, egymás mellé illesztve adják a jobb oldali
+  // ')' alakú ívet, középen erősebben, felül és alul finomabban.
+  constexpr int16_t arcStart[kStationArcFadeSegments] = {
+      300, 320, 340, 350, 5, 20, 40};
+  constexpr int16_t arcEnd[kStationArcFadeSegments] = {
+      320, 340, 350, 5, 20, 40, 60};
+  constexpr lv_opa_t arcOpacity[kStationArcFadeSegments] = {
+      LV_OPA_50, LV_OPA_50, LV_OPA_50, LV_OPA_50,
+      LV_OPA_50, LV_OPA_50, LV_OPA_50};
+  for (uint8_t segment = 0; segment < kStationArcFadeSegments; ++segment) {
+    selectorArcGlow_[segment] = lv_arc_create(selectorOverlay_);
+    lv_obj_set_size(selectorArcGlow_[segment], 840, 840);
+    lv_obj_set_pos(selectorArcGlow_[segment], -420, -260);
+    lv_arc_set_angles(selectorArcGlow_[segment], arcStart[segment],
+                      arcEnd[segment]);
+    lv_arc_set_bg_angles(selectorArcGlow_[segment], arcStart[segment],
+                         arcEnd[segment]);
+    lv_obj_set_style_arc_width(selectorArcGlow_[segment], 5,
+                               LV_PART_INDICATOR);
+    lv_obj_set_style_arc_color(selectorArcGlow_[segment],
+                               lv_color_hex(0x22D3EE), LV_PART_INDICATOR);
+    lv_obj_set_style_arc_opa(
+        selectorArcGlow_[segment],
+        LV_OPA_20,
+        LV_PART_INDICATOR);
+    lv_obj_set_style_arc_width(selectorArcGlow_[segment], 0, LV_PART_MAIN);
+    lv_obj_set_style_arc_opa(selectorArcGlow_[segment], LV_OPA_TRANSP,
+                             LV_PART_MAIN);
+    lv_obj_set_style_opa(selectorArcGlow_[segment], LV_OPA_COVER, 0);
+    lv_obj_set_style_opa(selectorArcGlow_[segment], LV_OPA_TRANSP,
+                         LV_PART_KNOB);
+    lv_obj_clear_flag(selectorArcGlow_[segment], LV_OBJ_FLAG_CLICKABLE);
+
+    selectorArcGuide_[segment] = lv_arc_create(selectorOverlay_);
+    lv_obj_set_size(selectorArcGuide_[segment], 840, 840);
+    lv_obj_set_pos(selectorArcGuide_[segment], -420, -260);
+    lv_arc_set_angles(selectorArcGuide_[segment], arcStart[segment],
+                      arcEnd[segment]);
+    lv_arc_set_bg_angles(selectorArcGuide_[segment], arcStart[segment],
+                         arcEnd[segment]);
+    lv_obj_set_style_arc_width(selectorArcGuide_[segment], 1,
+                               LV_PART_INDICATOR);
+    lv_obj_set_style_arc_color(selectorArcGuide_[segment],
+                               lv_color_hex(0x22D3EE), LV_PART_INDICATOR);
+    lv_obj_set_style_arc_opa(selectorArcGuide_[segment], arcOpacity[segment],
+                             LV_PART_INDICATOR);
+    lv_obj_set_style_arc_width(selectorArcGuide_[segment], 0, LV_PART_MAIN);
+    lv_obj_set_style_arc_opa(selectorArcGuide_[segment], LV_OPA_TRANSP,
+                             LV_PART_MAIN);
+    lv_obj_set_style_opa(selectorArcGuide_[segment], LV_OPA_COVER, 0);
+    lv_obj_set_style_opa(selectorArcGuide_[segment], LV_OPA_TRANSP,
+                         LV_PART_KNOB);
+    lv_obj_clear_flag(selectorArcGuide_[segment], LV_OBJ_FLAG_CLICKABLE);
+  }
+
+  // A korábbi szegmensek helyett a tényleges megjelenítéshez egyetlen,
+  // folyamatos ívet használunk; a többi objektumot elrejtjük.
+  for (uint8_t segment = 1; segment < kStationArcFadeSegments; ++segment) {
+    lv_obj_add_flag(selectorArcGlow_[segment], LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(selectorArcGuide_[segment], LV_OBJ_FLAG_HIDDEN);
+  }
+  lv_arc_set_angles(selectorArcGlow_[0], 300, 60);
+  lv_arc_set_bg_angles(selectorArcGlow_[0], 300, 60);
+  lv_arc_set_angles(selectorArcGuide_[0], 300, 60);
+  lv_arc_set_bg_angles(selectorArcGuide_[0], 300, 60);
+
+  // A két fókuszvonal közötti nagyon halvány, lekerekített fénymező. Ez
+  // adja a terven látható köztes kékes-türkiz tónust, de nem takarja el az
+  // aktív állomásnevet.
+  selectorFocusBand_ = lv_obj_create(selectorOverlay_);
+  lv_obj_set_size(selectorFocusBand_, 360, 52);
+  lv_obj_set_style_bg_color(selectorFocusBand_, lv_color_hex(0x164E63), 0);
+  lv_obj_set_style_bg_opa(selectorFocusBand_, LV_OPA_20, 0);
+  lv_obj_set_style_border_width(selectorFocusBand_, 0, 0);
+  lv_obj_set_style_radius(selectorFocusBand_, 18, 0);
+  lv_obj_clear_flag(selectorFocusBand_, LV_OBJ_FLAG_CLICKABLE);
+
+  // A látványterv szerinti két vékony fókuszvonal. Több, eltérő
+  // áttetszőségű szegmens adja a finom fényelhalást a végeknél.
+  constexpr int32_t focusSegmentWidth = 40;
+  for (uint8_t segment = 0; segment < kStationFocusSegments; ++segment) {
+    selectorFocusGlowTop_[segment] = lv_obj_create(selectorOverlay_);
+    selectorFocusGlowBottom_[segment] = lv_obj_create(selectorOverlay_);
+    selectorFocusTopSegments_[segment] = lv_obj_create(selectorOverlay_);
+    selectorFocusBottomSegments_[segment] = lv_obj_create(selectorOverlay_);
+    for (lv_obj_t* glow : {selectorFocusGlowTop_[segment],
+                           selectorFocusGlowBottom_[segment]}) {
+      lv_obj_set_size(glow, focusSegmentWidth, 6);
+      lv_obj_set_style_bg_color(glow, lv_color_hex(0x22D3EE), 0);
+      lv_obj_set_style_bg_opa(glow, LV_OPA_20, 0);
+      lv_obj_set_style_border_width(glow, 0, 0);
+      lv_obj_set_style_radius(glow, 3, 0);
+      lv_obj_clear_flag(glow, LV_OBJ_FLAG_CLICKABLE);
+    }
+    for (lv_obj_t* line : {selectorFocusTopSegments_[segment],
+                           selectorFocusBottomSegments_[segment]}) {
+      lv_obj_set_size(line, focusSegmentWidth, 2);
+      lv_obj_set_style_bg_color(line, lv_color_hex(0x22D3EE), 0);
+      lv_obj_set_style_bg_opa(line, LV_OPA_60, 0);
+      lv_obj_set_height(line, 1);
+      lv_obj_set_style_border_width(line, 0, 0);
+      lv_obj_set_style_radius(line, 1, 0);
+      lv_obj_clear_flag(line, LV_OBJ_FLAG_CLICKABLE);
+    }
+  }
+  for (uint8_t segment = 1; segment < kStationFocusSegments; ++segment) {
+    lv_obj_add_flag(selectorFocusGlowTop_[segment], LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(selectorFocusGlowBottom_[segment], LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(selectorFocusTopSegments_[segment], LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(selectorFocusBottomSegments_[segment], LV_OBJ_FLAG_HIDDEN);
+  }
+  lv_obj_set_size(selectorFocusGlowTop_[0], 360, 6);
+  lv_obj_set_size(selectorFocusGlowBottom_[0], 360, 6);
+  lv_obj_set_size(selectorFocusTopSegments_[0], 360, 1);
+  lv_obj_set_size(selectorFocusBottomSegments_[0], 360, 1);
+
+  for (uint8_t slot = 0; slot < kStationArcSlots; ++slot) {
+    selectorArcLabels_[slot] = lv_label_create(selectorOverlay_);
+    lv_obj_set_width(selectorArcLabels_[slot], 300);
+    // Az állomásnév egy sorban maradjon; hossz esetén vágjuk le, ne tördeljük.
+    lv_label_set_long_mode(selectorArcLabels_[slot], LV_LABEL_LONG_CLIP);
+    lv_obj_set_style_text_align(selectorArcLabels_[slot], LV_TEXT_ALIGN_LEFT,
+                                0);
+    lv_obj_clear_flag(selectorArcLabels_[slot], LV_OBJ_FLAG_CLICKABLE);
+  }
+  refreshStationSelectorArc();
 
   lv_obj_t* hint = lv_label_create(selectorOverlay_);
   lv_label_set_text(hint, "A kijelölt adó 3 másodperc múlva elindul");
@@ -897,6 +1078,119 @@ void DisplayManager::showStationSelector() {
   selectorConstructing_ = false;
 }
 
+void DisplayManager::refreshStationSelectorArc() {
+  if (!selectorRoller_ || !actions_.stationCount || !actions_.stationName)
+    return;
+
+  const size_t count = actions_.stationCount(actions_.context);
+  if (count == 0) return;
+
+  const int32_t target = selectorArcTargetIndex_;
+  const float visualPosition =
+      static_cast<float>(selectorArcPosition100_) / 100.0f;
+  constexpr int32_t centerY = 166;
+  constexpr int32_t rowHeight = 34;
+  constexpr int32_t rowGap = 6;
+  const int32_t activeHeight = lv_font_get_line_height(fonts_.large());
+  const int32_t neighbourHeight = lv_font_get_line_height(fonts_.small());
+  const float activeVisualOffset = static_cast<float>(target) - visualPosition;
+  const float activeCenterY = centerY + activeVisualOffset * rowHeight;
+  // Nagyobb, jobbra tolt képzeletbeli kör: a hosszú neveknek több hely jut.
+  constexpr int32_t leftMostX = 104;
+
+  if (selectorFocusTopSegments_[0]) {
+    const int32_t focusY = static_cast<int32_t>(activeCenterY);
+    const int32_t activeHeight = lv_font_get_line_height(fonts_.large());
+    const int32_t topY = focusY - activeHeight / 2 - 7;
+    const int32_t bottomY = focusY + activeHeight / 2 + 5;
+    if (selectorFocusBand_) {
+      lv_obj_set_pos(selectorFocusBand_, 32, topY + 2);
+      lv_obj_set_size(selectorFocusBand_, 360,
+                      max<int32_t>(8, bottomY - topY - 2));
+    }
+    for (uint8_t segment = 0; segment < kStationFocusSegments; ++segment) {
+      const int32_t x = 32 + static_cast<int32_t>(segment) * 40;
+      lv_obj_set_pos(selectorFocusGlowTop_[segment], x, topY - 2);
+      lv_obj_set_pos(selectorFocusGlowBottom_[segment], x, bottomY - 2);
+      lv_obj_set_pos(selectorFocusTopSegments_[segment], x, topY);
+      lv_obj_set_pos(selectorFocusBottomSegments_[segment], x, bottomY);
+    }
+  }
+
+  for (uint8_t slot = 0; slot < kStationArcSlots; ++slot) {
+    lv_obj_t* label = selectorArcLabels_[slot];
+    if (!label) continue;
+
+    const int32_t offset = static_cast<int32_t>(slot) -
+                           static_cast<int32_t>(kStationArcSlots / 2);
+    const int32_t index = target + offset;
+    if (index < 0 || index >= static_cast<int32_t>(count)) {
+      lv_obj_add_flag(label, LV_OBJ_FLAG_HIDDEN);
+      continue;
+    }
+
+    lv_obj_clear_flag(label, LV_OBJ_FLAG_HIDDEN);
+    String name = actions_.stationName(actions_.context,
+                                       static_cast<size_t>(index));
+    name.replace("\n", " ");
+    name.replace("\r", " ");
+    lv_label_set_text(label, name.c_str());
+
+    const float visualOffset = static_cast<float>(index) - visualPosition;
+    const float distance = fabsf(visualOffset);
+    // Laposabb parabola-közelítés egy jobbra eltolt, nagyobb körívhez.
+    const int32_t x = index == target
+                          ? 32
+                          : leftMostX +
+                                static_cast<int32_t>(distance * distance * 6.0f);
+    const int32_t relative = index - target;
+    int32_t y = 0;
+    if (relative == 0) {
+      y = static_cast<int32_t>(activeCenterY) - activeHeight / 2;
+    } else if (relative > 0) {
+      y = static_cast<int32_t>(activeCenterY) + activeHeight / 2 + rowGap +
+          (relative - 1) * (neighbourHeight + rowGap);
+    } else {
+      const int32_t distanceFromActive = -relative;
+      y = static_cast<int32_t>(activeCenterY) - activeHeight / 2 - rowGap -
+          neighbourHeight - (distanceFromActive - 1) *
+                                  (neighbourHeight + rowGap);
+    }
+    lv_obj_set_pos(label, x, y);
+
+    if (index == target) {
+      lv_obj_set_style_text_font(label, fonts_.large(), 0);
+      lv_obj_set_style_text_color(label, lv_color_hex(0x22D3EE), 0);
+    } else {
+      lv_obj_set_style_text_font(label, fonts_.small(), 0);
+      lv_obj_set_style_text_color(label, lv_color_hex(0x94A3B8), 0);
+    }
+  }
+}
+
+void DisplayManager::animateStationSelectorArc(int32_t targetIndex,
+                                               uint16_t durationMs) {
+  if (!selectorRoller_) return;
+
+  selectorArcTargetIndex_ = targetIndex;
+  const int32_t targetPosition = targetIndex * 100;
+  lv_anim_delete(this, stationArcAnimExec);
+  // A listaváltás ne mozgassa el az egész állomáslistát. A kiválasztás
+  // legyen diszkrét: csak az új állapot és a fókusz színezése változzon.
+  // A duration paramétert megtartjuk az interfészben a későbbi finom
+  // áttűnéshez, de jelenleg szándékosan nem indítunk pozícióanimációt.
+  (void)durationMs;
+  selectorArcPosition100_ = targetPosition;
+  refreshStationSelectorArc();
+}
+
+void DisplayManager::stationArcAnimExec(void* var, int32_t value) {
+  auto* manager = static_cast<DisplayManager*>(var);
+  if (!manager) return;
+  manager->selectorArcPosition100_ = value;
+  manager->refreshStationSelectorArc();
+}
+
 void DisplayManager::hideStationSelector() {
   if (selectorOverlay_) lv_obj_delete(selectorOverlay_);
   resetStationSelector();
@@ -905,7 +1199,22 @@ void DisplayManager::hideStationSelector() {
 void DisplayManager::resetStationSelector() {
   selectorOverlay_ = nullptr;
   selectorRoller_ = nullptr;
+  for (auto& label : selectorArcLabels_) label = nullptr;
   selectorStatusLabel_ = nullptr;
+  selectorFocusBar_ = nullptr;
+  selectorFocusBarBottom_ = nullptr;
+  selectorFocusBand_ = nullptr;
+  for (auto& line : selectorFocusTopSegments_) line = nullptr;
+  for (auto& line : selectorFocusBottomSegments_) line = nullptr;
+  for (auto& glow : selectorFocusGlowTop_) glow = nullptr;
+  for (auto& glow : selectorFocusGlowBottom_) glow = nullptr;
+  for (auto& arc : selectorArcGuide_) arc = nullptr;
+  for (auto& glow : selectorArcGlow_) glow = nullptr;
+  selectorArcPosition100_ = 0;
+  selectorArcTargetIndex_ = 0;
+  selectorArcNextDurationMs_ = 220;
+  selectorLastMoveAt_ = 0;
+  selectorLastMoveDirection_ = 0;
   selectorPendingIndex_ = -1;
   selectorSelectAt_ = 0;
   selectorCountdown_ = 0;
@@ -958,6 +1267,7 @@ void DisplayManager::stationSelectorEvent(lv_event_t* event) {
   if (lv_event_get_code(event) == LV_EVENT_VALUE_CHANGED) {
     manager->selectorPendingIndex_ = static_cast<int32_t>(
         lv_roller_get_selected(manager->selectorRoller_));
+    manager->animateStationSelectorArc(manager->selectorPendingIndex_);
     manager->selectorSelectAt_ = millis() + kStationSelectDelayMs;
     manager->selectorCountdown_ = 0;
   }

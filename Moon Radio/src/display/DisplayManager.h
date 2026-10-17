@@ -69,6 +69,7 @@ class DisplayManager {
                     uint8_t* pixels);
   static void readTouch(lv_indev_t* input, lv_indev_data_t* data);
   static void stationSelectorEvent(lv_event_t* event);
+  static void stationArcAnimExec(void* var, int32_t value);
   static void closeSelectorEvent(lv_event_t* event);
   static void presetModeEvent(lv_event_t* event);
   static void presetSlotEvent(lv_event_t* event);
@@ -88,6 +89,8 @@ class DisplayManager {
   void showStationSelector();
   void hideStationSelector();
   void updateStationSelector();
+  void refreshStationSelectorArc();
+  void animateStationSelectorArc(int32_t targetIndex, uint16_t durationMs = 220);
   void resetStationSelector();
   void hidePresets();
   void resetPresets();
@@ -105,6 +108,9 @@ class DisplayManager {
   static constexpr int32_t kAxsVuTop = 258;
   static constexpr int32_t kAxsVuHeight = 62;
   static constexpr int32_t kAxsVuWidth = 240;
+  static constexpr uint8_t kStationArcSlots = 7;
+  static constexpr uint8_t kStationArcFadeSegments = 7;
+  static constexpr uint8_t kStationFocusSegments = 9;
 
   DisplayDevice device_;
   FontManager fonts_;
@@ -142,9 +148,26 @@ class DisplayManager {
   int32_t touchStartX_{0};
   int32_t touchStartY_{0};
   int32_t lastSwipeX_{0};
+  int32_t lastSelectorTouchY_{0};
+  uint32_t selectorTouchStartAt_{0};
   lv_obj_t* selectorOverlay_{nullptr};
   lv_obj_t* selectorRoller_{nullptr};
+  lv_obj_t* selectorArcLabels_[kStationArcSlots]{};
   lv_obj_t* selectorStatusLabel_{nullptr};
+  lv_obj_t* selectorFocusBar_{nullptr};
+  lv_obj_t* selectorFocusBarBottom_{nullptr};
+  lv_obj_t* selectorFocusBand_{nullptr};
+  lv_obj_t* selectorFocusTopSegments_[kStationFocusSegments]{};
+  lv_obj_t* selectorFocusBottomSegments_[kStationFocusSegments]{};
+  lv_obj_t* selectorFocusGlowTop_[kStationFocusSegments]{};
+  lv_obj_t* selectorFocusGlowBottom_[kStationFocusSegments]{};
+  lv_obj_t* selectorArcGuide_[kStationArcFadeSegments]{};
+  lv_obj_t* selectorArcGlow_[kStationArcFadeSegments]{};
+  int32_t selectorArcPosition100_{0};
+  int32_t selectorArcTargetIndex_{0};
+  uint16_t selectorArcNextDurationMs_{220};
+  uint32_t selectorLastMoveAt_{0};
+  int8_t selectorLastMoveDirection_{0};
   int32_t selectorPendingIndex_{-1};
   uint32_t selectorSelectAt_{0};
   uint8_t selectorCountdown_{0};
