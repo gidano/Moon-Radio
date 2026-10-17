@@ -949,7 +949,7 @@ void RadioController::toggleAction(void* context) {
 void RadioController::nextAction(void* context) {
   RadioController* radio = static_cast<RadioController*>(context);
   if (radio->display_.stationSelectorActive()) {
-    radio->display_.moveStationSelector(1);
+    radio->display_.moveStationSelector(-1);
     return;
   }
   radio->nextStation();
