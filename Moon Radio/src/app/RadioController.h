@@ -56,6 +56,8 @@ class RadioController {
   uint8_t volume() const;
   void setBrightness(uint8_t value);
   uint8_t brightness() const;
+  const char* uiLanguage() const;
+  bool setUiLanguage(String value);
   const String& timezone() const;
   bool setTimezone(String value);
   bool backgroundEnabled() const;

@@ -1,3 +1,4 @@
+#include "../i18n/Language.h"
 #include "RadioController.h"
 
 #include <algorithm>
@@ -153,6 +154,7 @@ bool RadioController::begin() {
     if (startupPreferences.begin("lvgl-radio", true)) {
       colorInverted_ = startupPreferences.getBool("color_inv", false);
       screenFlipped_ = startupPreferences.getBool("screen_flip", false);
+      Language::set(startupPreferences.getString("ui_lang", Language::defaultCode()));
       startupPreferences.end();
     }
   }
@@ -235,7 +237,7 @@ bool RadioController::begin() {
                            static_cast<uint8_t>(WeatherDisplayMode::Current)));
   clockTts_.enabled = preferences.getBool("ctts_on", false);
   clockTts_.language =
-      normalizeClockTtsLanguage(preferences.getString("ctts_lang", "HU"));
+      normalizeClockTtsLanguage(preferences.getString("ctts_lang", Language::code()));
   clockTts_.intervalMinutes = preferences.getUShort("ctts_int", 60);
   if (clockTts_.intervalMinutes < 1) clockTts_.intervalMinutes = 1;
   clockTts_.onlyWhenNoStream = preferences.getBool("ctts_no", false);
@@ -453,7 +455,7 @@ const Station* RadioController::currentStation() const {
 AudioSnapshot RadioController::audioSnapshot() {
   const Station* station = currentStation();
   AudioSnapshot snapshot =
-      audio_.snapshot(station ? station->name : String("Nincs állomás"));
+      audio_.snapshot(station ? station->name : String(Language::text("Nincs állomás")));
   // A MyOnlineRadio által adott aktuális cím pontosabb, mint az érintett
   // adók gyakran csak szlogent vagy műsornevet küldő stream-metaadata.
   const String externalTitle = metadata_.title();
@@ -849,7 +851,7 @@ bool RadioController::forceClockTts(const String& text,
 void RadioController::beginBackgroundUploadMode() {
   if (backgroundUploadMode_) return;
   const AudioSnapshot snapshot = audio_.snapshot(
-      currentStation() ? currentStation()->name : String("Nincs állomás"));
+      currentStation() ? currentStation()->name : String(Language::text("Nincs állomás")));
   backgroundUploadResumePlayback_ =
       wifiManager_.connected() &&
       (snapshot.running || snapshot.paused || !currentPlayUrl_.isEmpty());
@@ -1330,4 +1332,22 @@ void RadioController::refreshDisplay(bool force) {
                   wifiStatusText(), ipText, weather_.snapshot(),
                   performanceMonitor_.snapshot(), backgroundEnabled_,
                   backgroundPath_, backgroundOpacity_);
+}
+
+const char* RadioController::uiLanguage() const { return Language::code(); }
+bool RadioController::setUiLanguage(String value) {
+  value.trim(); value.toLowerCase();
+  if (value != "hu" && value != "en" && value != "de" && value != "pl") return false;
+  if (value == Language::code()) return true;
+  Preferences preferences;
+  if (!preferences.begin("lvgl-radio", false)) return false;
+  if (!preferences.putString("ui_lang", value)) { preferences.end(); return false; }
+  preferences.end();
+  Language::set(value);
+  ClockTtsConfig config = clockTts_;
+  config.language = value;
+  setClockTtsConfig(config);
+  display_.languageChanged();
+  refreshDisplay(true);
+  return true;
 }
