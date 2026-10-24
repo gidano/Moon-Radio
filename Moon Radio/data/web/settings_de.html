@@ -170,6 +170,7 @@
             }
         }
     </style>
+    <script src="/web/language.js" defer></script>
 </head>
 <body>
     <div class="container">
@@ -183,14 +184,14 @@
             <div class="panel-body">
                 <div class="grid">
                     <div>
-                        <label for="webLanguage">Sprache der Weboberfläche</label>
+                        <label for="webLanguage">Sprache für Radio und Weboberfläche</label>
                         <select id="webLanguage" onchange="changeWebLanguage(this.value)">
                             <option value="hu">Ungarisch</option>
                             <option value="en">English</option>
                             <option value="de">Deutsch</option>
                             <option value="pl">Polski</option>
                         </select>
-                        <div class="hint">Aktuell wird nur die Sprache der Weboberfläche geändert. Die Sprache des Radiodisplays wird später angebunden.</div>
+                        <div class="hint">Die Auswahl ändert auch die Sprache des Radiodisplays und der Zeitansage und bleibt nach einem Neustart erhalten.</div>
                     </div>
                 </div>
             </div>
@@ -441,20 +442,29 @@
         };
 
         function initializeWebLanguageSelector() {
-            try {
-                localStorage.setItem('radioWebLanguage', currentWebLanguage);
-            } catch (_) {}
-            const select = document.getElementById('webLanguage');
-            if (select) select.value = currentWebLanguage;
+            document.getElementById('webLanguage').value = currentWebLanguage;
         }
 
-        function changeWebLanguage(language) {
+        async function changeWebLanguage(language) {
             const target = webLanguagePaths[language];
             if (!target || language === currentWebLanguage) return;
+            const select = document.getElementById('webLanguage');
+            select.disabled = true;
+            window.radioLanguageChanging = true;
             try {
-                localStorage.setItem('radioWebLanguage', language);
-            } catch (_) {}
-            window.location.href = target;
+                const response = await fetch('/api/language', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ language })
+                });
+                if (!response.ok || !(await response.json()).ok) throw new Error('language');
+                window.location.href = target;
+            } catch (_) {
+                select.value = currentWebLanguage;
+                select.disabled = false;
+                window.radioLanguageChanging = false;
+                alert('Die Sprache konnte nicht geändert werden. Bitte erneut versuchen.');
+            }
         }
 
         function togglePanel(id, button) {
