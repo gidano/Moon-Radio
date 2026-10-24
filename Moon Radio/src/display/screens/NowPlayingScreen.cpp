@@ -1,3 +1,4 @@
+#include "../../i18n/Language.h"
 #include "NowPlayingScreen.h"
 
 #include <algorithm>
@@ -413,7 +414,7 @@ void NowPlayingScreen::create(FontManager& fonts,
   lv_obj_set_height(stationLabel_, 34);
   lv_obj_set_style_text_font(stationLabel_, fonts.large(), 0);
   lv_label_set_long_mode(stationLabel_, LV_LABEL_LONG_DOT);
-  lv_label_set_text(stationLabel_, "Állomás betöltése");
+  lv_label_set_text(stationLabel_, Language::text("Állomás betöltése"));
   lv_obj_add_flag(stationLabel_, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_set_ext_click_area(stationLabel_, 8);
   lv_obj_add_event_cb(stationLabel_, stationEvent, LV_EVENT_CLICKED, this);
@@ -462,7 +463,7 @@ void NowPlayingScreen::create(FontManager& fonts,
   lv_obj_set_style_text_color(infoLabel_, lv_color_hex(0x7DD3FC), 0);
   lv_obj_set_style_text_font(infoLabel_, fonts.regular(), 0);
   lv_label_set_long_mode(infoLabel_, LV_LABEL_LONG_DOT);
-  lv_label_set_text(infoLabel_, "Kapcsolódás...");
+  lv_label_set_text(infoLabel_, Language::text("Kapcsolódás..."));
 
   dateLabel_ = lv_label_create(screen);
   lv_obj_set_pos(dateLabel_, 14, 188);                                  // dátum sor pozíció magasság
@@ -713,7 +714,7 @@ void NowPlayingScreen::update(const AudioSnapshot& audio,
   if (playbackStopped) {
     displayTitle = audio.statusText;
     displayTitle.trim();
-    if (displayTitle == "Leállítva") displayTitle = "";
+    if (displayTitle == Language::text("Leállítva")) displayTitle = "";
   } else {
     displayTitle = audio.streamTitle;
   }
@@ -746,11 +747,11 @@ void NowPlayingScreen::update(const AudioSnapshot& audio,
   setLabelTextIfChanged(ipLabel_, ipText_.c_str());
   if (playButtonLabel_)
     setLabelTextIfChanged(playButtonLabel_,
-                          playbackStopped ? "Lejátszás" : "Szünet");
+                          playbackStopped ? Language::text("Lejátszás") : Language::text("Szünet"));
 
   String info;
   if (playbackStopped) {
-    info = "Nincs lejátszás";
+    info = Language::text("Nincs lejátszás");
   } else {
     if (!audio.codec.isEmpty()) info += audio.codec;
     if (audio.bitrateKbps > 0) {
@@ -769,11 +770,11 @@ void NowPlayingScreen::update(const AudioSnapshot& audio,
       if (!audio.statusText.isEmpty())
         info = audio.statusText;
       else if (audio.running)
-        info = "Lejátszás";
+        info = Language::text("Lejátszás");
       else if (audio.connecting)
-        info = "Kapcsolódás...";
+        info = Language::text("Kapcsolódás...");
       else
-        info = "Nincs lejátszás";
+        info = Language::text("Nincs lejátszás");
     }
   }
   setLabelTextIfChanged(infoLabel_, info.c_str());
