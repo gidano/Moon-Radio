@@ -5,7 +5,7 @@
 /* -- Névnap-táblázat -- Vesszővel elválasztott nevek az év minden napjára. 
 */
 
-const char* namedays[] = {
+static const char* const namedaysHU[] = {
   // Január
   "Alpár,Fruzsina,Bazil",
   "Ábel,Gergely,Vazul",
