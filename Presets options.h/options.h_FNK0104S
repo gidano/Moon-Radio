@@ -6,8 +6,8 @@
     #define ARDUINO_ESP32S3_DEV
 #endif
 
-#define LANGUAGE HU
-#define NAMEDAYS_FILE HU
+#define LANGUAGE HU // HU EN DE PL: alapnyelv az elso telepiteskor; kesobb a webes valasztas az ervenyes.
+#define NAMEDAYS_FILE HU // Regi kompatibilitasi beallitas; a nevnapok a kivalasztott LANGUAGE/webes nyelvet kovetik.
 
 /* ST7796 SPI display; the firmware rotates this to 480x320 landscape. */
 #define DSP_MODEL DSP_FNK0104S
