@@ -8,8 +8,8 @@ LV_FONT_DECLARE(lv_font_roboto_hu_20);
 LV_FONT_DECLARE(lv_font_roboto_hu_28);
 
 void FontManager::begin() {
-  // Szabály: minden emberi olvasásra szánt UI-szöveg a magyar Roboto
-  // készletből jön. A "small" is ezt aliasolja, hogy ne legyenek rejtett
+  // A Roboto keszlet tartalmazza a HU/EN/DE/PL ekezetes karaktereit.
+  // A "small" is ezt aliasolja, hogy ne legyenek rejtett
   // ékezet-hiányok. Külön font csak ikonokhoz/szimbólumokhoz marad.
   font14_ = &lv_font_roboto_hu_20;
   font20_ = &lv_font_roboto_hu_20;

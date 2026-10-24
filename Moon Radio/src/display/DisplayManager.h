@@ -53,6 +53,7 @@ class DisplayManager {
   void showMaintenance();
   void showWifiSetup(const String& address);
   void showPresets();
+  void languageChanged();
   bool visualizerActive() const;
   void setBrightness(uint8_t value);
   uint8_t brightness() const;

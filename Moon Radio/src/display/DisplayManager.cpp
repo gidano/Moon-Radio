@@ -1,3 +1,4 @@
+#include "../i18n/Language.h"
 #include "DisplayManager.h"
 
 #include <LittleFS.h>
@@ -590,7 +591,7 @@ bool DisplayManager::moveStationSelector(int8_t delta) {
   selectorSelectAt_ = millis() + kStationSelectDelayMs;
   selectorCountdown_ = 0;
   if (selectorStatusLabel_) {
-    lv_label_set_text(selectorStatusLabel_, "Indítás 3 mp múlva");
+    lv_label_set_text(selectorStatusLabel_, Language::text("Indítás 3 mp múlva"));
   }
   return true;
 }
@@ -623,14 +624,14 @@ void DisplayManager::showMaintenance() {
   lv_obj_clear_flag(accent, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t* title = lv_label_create(screen);
-  lv_label_set_text(title, "KARBANTARTÁSI MÓD");
+  lv_label_set_text(title, Language::text("KARBANTARTÁSI MÓD"));
   lv_obj_set_pos(title, 70, 68);
   lv_obj_set_width(title, 380);
   lv_obj_set_style_text_font(title, fonts_.large(), 0);
   lv_obj_set_style_text_color(title, lv_color_hex(0x22D3EE), 0);
 
   lv_obj_t* subtitle = lv_label_create(screen);
-  lv_label_set_text(subtitle, "LittleFS fájlkezelő csatlakozott");
+  lv_label_set_text(subtitle, Language::text("LittleFS fájlkezelő csatlakozott"));
   lv_obj_set_pos(subtitle, 72, 132);
   lv_obj_set_width(subtitle, 370);
   lv_obj_set_style_text_font(subtitle, fonts_.regular(), 0);
@@ -638,8 +639,7 @@ void DisplayManager::showMaintenance() {
 
   lv_obj_t* hint = lv_label_create(screen);
   lv_label_set_text(hint,
-                    "Fájlművelet van folyamatban.\n"
-                    "Ha végeztél, használd az ÚJRAINDÍTÁS gombot.");
+                    Language::text("Fájlművelet van folyamatban.\nHa végeztél, használd az ÚJRAINDÍTÁS gombot."));
   lv_obj_set_pos(hint, 72, 187);
   lv_obj_set_width(hint, 370);
   lv_obj_set_style_text_font(hint, fonts_.small(), 0);
@@ -672,14 +672,14 @@ void DisplayManager::showWifiSetup(const String& address) {
   lv_obj_clear_flag(accent, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t* title = lv_label_create(screen);
-  lv_label_set_text(title, "WI-FI BEÁLLÍTÁS");
+  lv_label_set_text(title, Language::text("WI-FI BEÁLLÍTÁS"));
   lv_obj_set_pos(title, 70, 68);
   lv_obj_set_width(title, 380);
   lv_obj_set_style_text_font(title, fonts_.large(), 0);
   lv_obj_set_style_text_color(title, lv_color_hex(0x22D3EE), 0);
 
   lv_obj_t* subtitle = lv_label_create(screen);
-  lv_label_set_text_fmt(subtitle, "Kapcsolódj ehhez: Moon-Radio-Setup\nNyisd meg: http://%s/",
+  lv_label_set_text_fmt(subtitle, Language::text("Kapcsolódj ehhez: Moon-Radio-Setup\nNyisd meg: http://%s/"),
                         address.c_str());
   lv_obj_set_pos(subtitle, 72, 132);
   lv_obj_set_width(subtitle, 370);
@@ -689,10 +689,7 @@ void DisplayManager::showWifiSetup(const String& address) {
 
   lv_obj_t* hint = lv_label_create(screen);
   lv_label_set_text(hint,
-                    "A wifi.txt hiányzik vagy hibás.\n"
-                    "Nyisd meg a helyi beállító oldalt,\n"
-                    "mentsd el a Wi-Fi nevét és jelszavát,\n"
-                    "majd a rádió újraindul.");
+                    Language::text("A wifi.txt hiányzik vagy hibás.\nNyisd meg a helyi beállító oldalt,\nmentsd el a Wi-Fi nevét és jelszavát,\nmajd a rádió újraindul."));
   lv_obj_set_pos(hint, 72, 205);
   lv_obj_set_width(hint, 370);
   lv_obj_set_style_text_font(hint, fonts_.small(), 0);
@@ -856,13 +853,13 @@ void DisplayManager::showStationSelector() {
   lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t* title = lv_label_create(header);
-  lv_label_set_text(title, "ÁLLOMÁSOK");
+  lv_label_set_text(title, Language::text("ÁLLOMÁSOK"));
   lv_obj_set_pos(title, 16, 12);
   lv_obj_set_style_text_font(title, fonts_.large(), 0);
   lv_obj_set_style_text_color(title, lv_color_hex(0xF1F5F9), 0);
 
   selectorStatusLabel_ = lv_label_create(header);
-  lv_label_set_text(selectorStatusLabel_, "Görgess a listában");
+  lv_label_set_text(selectorStatusLabel_, Language::text("Görgess a listában"));
   lv_obj_set_pos(selectorStatusLabel_, 190, 13);
   lv_obj_set_width(selectorStatusLabel_, 231);
   lv_obj_set_style_text_font(selectorStatusLabel_, fonts_.regular(), 0);
@@ -1066,7 +1063,7 @@ void DisplayManager::showStationSelector() {
   refreshStationSelectorArc();
 
   lv_obj_t* hint = lv_label_create(selectorOverlay_);
-  lv_label_set_text(hint, "A kijelölt adó 3 másodperc múlva elindul");
+  lv_label_set_text(hint, Language::text("A kijelölt adó 3 másodperc múlva elindul"));
   lv_obj_set_pos(hint, 16, 294);
   lv_obj_set_width(hint, 448);
   lv_obj_set_style_text_font(hint, fonts_.regular(), 0);
@@ -1243,7 +1240,7 @@ void DisplayManager::updateStationSelector() {
   if (seconds != selectorCountdown_ && selectorStatusLabel_) {
     selectorCountdown_ = seconds;
     char text[32];
-    snprintf(text, sizeof(text), "Indítás %u mp múlva", seconds);
+    snprintf(text, sizeof(text), Language::text("Indítás %u mp múlva"), seconds);
     lv_label_set_text(selectorStatusLabel_, text);
   }
 }
@@ -1260,7 +1257,7 @@ void DisplayManager::stationSelectorEvent(lv_event_t* event) {
     manager->selectorSelectAt_ = 0;
     manager->selectorCountdown_ = 0;
     if (manager->selectorStatusLabel_)
-      lv_label_set_text(manager->selectorStatusLabel_, "Görgess a listában");
+      lv_label_set_text(manager->selectorStatusLabel_, Language::text("Görgess a listában"));
     return;
   }
 
@@ -1308,7 +1305,7 @@ void DisplayManager::showPresets() {
   lv_obj_set_style_pad_all(header, 0, 0);
   lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
 
-  constexpr const char* modeNames[3] = {"LEJÁTSZÁS", "MENTÉS", "TÖRLÉS"};
+  const char* modeNames[3] = {Language::text("LEJÁTSZÁS"), Language::text("MENTÉS"), Language::text("TÖRLÉS")};
   for (uint8_t index = 0; index < 3; ++index) {
     presetModeButtons_[index] = lv_button_create(header);
     lv_obj_set_size(presetModeButtons_[index], 138, 46);
@@ -1401,7 +1398,7 @@ void DisplayManager::showPresets() {
   setPresetMode(PresetMode::Play);
   refreshPresetBanks();
   refreshPresetSlots();
-  setPresetStatus("Válassz egy kedvenc állomást");
+  setPresetStatus(Language::text("Válassz egy kedvenc állomást"));
   lv_obj_move_foreground(presetOverlay_);
 }
 
@@ -1432,7 +1429,7 @@ void DisplayManager::updatePresets() {
       now - presetDeleteArmedAt_ >= 3000) {
     presetDeleteArmed_ = -1;
     refreshPresetSlots();
-    setPresetStatus("A törlés megszakítva");
+    setPresetStatus(Language::text("A törlés megszakítva"));
   }
   if (now - presetLastActivity_ >= 20000) hidePresets();
 }
@@ -1460,11 +1457,11 @@ void DisplayManager::setPresetMode(PresetMode mode) {
   refreshPresetSlots();
 
   if (mode == PresetMode::Play)
-    setPresetStatus("Érints meg egy állomást a lejátszáshoz");
+    setPresetStatus(Language::text("Érints meg egy állomást a lejátszáshoz"));
   else if (mode == PresetMode::Save)
-    setPresetStatus("Válassz helyet az aktuális állomásnak");
+    setPresetStatus(Language::text("Válassz helyet az aktuális állomásnak"));
   else
-    setPresetStatus("A törléshez érintsd meg kétszer a helyet", 0xFCA5A5);
+    setPresetStatus(Language::text("A törléshez érintsd meg kétszer a helyet"), 0xFCA5A5);
 }
 
 void DisplayManager::refreshPresetSlots() {
@@ -1483,7 +1480,7 @@ void DisplayManager::refreshPresetSlots() {
     const bool currentStation = !empty && preset->url == currentUrl;
     const bool deleteArmed = presetDeleteArmed_ == static_cast<int8_t>(slot);
     String label = String(slot + 1) + ". ";
-    label += empty ? "Üres hely" : preset->name;
+    label += empty ? Language::text("Üres hely") : preset->name;
     lv_label_set_text(presetSlotLabels_[slot], label.c_str());
 
     uint32_t background = empty ? 0x111827 : 0x10243A;
@@ -1537,22 +1534,22 @@ void DisplayManager::handlePresetSlot(uint8_t slot) {
   if (presetMode_ == PresetMode::Save) {
     const size_t current = actions_.currentStation(actions_.context);
     if (current >= actions_.stationCount(actions_.context)) {
-      setPresetStatus("Nincs menthető állomás", 0xFCA5A5);
+      setPresetStatus(Language::text("Nincs menthető állomás"), 0xFCA5A5);
       return;
     }
     const String name = actions_.stationName(actions_.context, current);
     const String url = actions_.stationUrl(actions_.context, current);
     if (presets_.saveSlot(slot, name, url)) {
       refreshPresetSlots();
-      setPresetStatus("Elmentve: " + name);
+      setPresetStatus(String(Language::text("Elmentve: ")) + name);
     } else {
-      setPresetStatus("A preset nem menthető", 0xFCA5A5);
+      setPresetStatus(Language::text("A preset nem menthető"), 0xFCA5A5);
     }
     return;
   }
 
   if (preset->empty()) {
-    setPresetStatus("Ez a presethely üres", 0xFCA5A5);
+    setPresetStatus(Language::text("Ez a presethely üres"), 0xFCA5A5);
     return;
   }
 
@@ -1562,23 +1559,23 @@ void DisplayManager::handlePresetSlot(uint8_t slot) {
       presetDeleteArmed_ = static_cast<int8_t>(slot);
       presetDeleteArmedAt_ = millis();
       refreshPresetSlots();
-      setPresetStatus("Érintsd meg újra a törléshez", 0xFCA5A5);
+      setPresetStatus(Language::text("Érintsd meg újra a törléshez"), 0xFCA5A5);
       return;
     }
     const String name = preset->name;
     if (presets_.clearSlot(slot)) {
       presetDeleteArmed_ = -1;
       refreshPresetSlots();
-      setPresetStatus("Törölve: " + name);
+      setPresetStatus(String(Language::text("Törölve: ")) + name);
     } else {
-      setPresetStatus("A preset nem törölhető", 0xFCA5A5);
+      setPresetStatus(Language::text("A preset nem törölhető"), 0xFCA5A5);
     }
     return;
   }
 
   const int32_t stationIndex = stationIndexForUrl(preset->url);
   if (stationIndex < 0) {
-    setPresetStatus("Az állomás már nincs a listában", 0xFCA5A5);
+    setPresetStatus(Language::text("Az állomás már nincs a listában"), 0xFCA5A5);
     return;
   }
   hidePresets();
@@ -1679,7 +1676,7 @@ void DisplayManager::calibrateTouch() {
     lv_obj_t* active = lv_screen_active();
     lv_obj_set_style_bg_color(active, lv_color_hex(0x101827), 0);
     lv_obj_t* label = lv_label_create(active);
-    lv_label_set_text(label, "Érintsd meg a nyilakat\na kalibráláshoz");
+    lv_label_set_text(label, Language::text("Érintsd meg a nyilakat\na kalibráláshoz"));
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_font(label, fonts_.large(), 0);
@@ -1694,4 +1691,9 @@ void DisplayManager::calibrateTouch() {
   lv_obj_clean(lv_screen_active());
   device_.fillScreen(TFT_BLACK);
 #endif
+}
+
+void DisplayManager::languageChanged() {
+  hideStationSelector();
+  hidePresets();
 }
