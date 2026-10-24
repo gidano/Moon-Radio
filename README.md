@@ -28,9 +28,32 @@ elérhető kezeléssel.
   hőmérséklet adataival.
 - Hangerő- és fényerőszabályzás.
 - Wi-Fi beállítás és időzóna-kezelés.
-- Magyar, angol, német és lengyel nyelvű webes kezelőfelület.
+- Magyar, angol, német és lengyel nyelvű rádió és webes kezelőfelület.
 - Állomások, logók, háttérképek és egyéb rádiós tartalmak vezeték nélküli
   kezelése.
+
+## Nyelvválasztás
+
+Mentett nyelvválasztás hiányában az `options.h` fájl `LANGUAGE` beállítása adja az alapnyelvet:
+`HU`, `EN`, `DE` vagy `PL`. A webes Beállítások / Nyelv választója együtt
+váltja a rádió és a webfelület nyelvét, a dátumot, névnapokat, időjárási
+feliratokat és az időbemondás nyelvét. A választás újraindítás után is megmarad,
+és felülírja a fordításkori alapnyelvet. Egy későbbi firmware-frissítés is
+megtartja a mentett választást; az `options.h` átírása önmagában nem írja felül.
+Az időbemondás külön nyelvválasztója
+továbbra is használható. A régi `NAMEDAYS_FILE` beállítás helyett a névnaplista
+automatikusan a közös nyelvet követi.
+
+Mind a négy `index_*.html`, `settings_*.html` és `search_*.html` oldal a rádió
+mentett nyelvét követi. Az aktív böngészőlapok 5 másodpercenként ellenőrzik
+a rádió beállítását; háttérből visszatérve szintén frissítik a nyelvet.
+A frissítéshez a firmware mellett a webes
+fájlokat is fel kell tölteni, az új `data/web/language.js` fájllal együtt.
+
+Az angol `src/time/nameday_EN.h` 366 napos, európai névnapi és szentnapi
+hagyományokhoz igazított projektlista, angol nevekkel; nem hivatalos brit
+vagy amerikai névnaptár. Mind a négy táblázat tartalmaz február 29-i helyet,
+így a márciusi és későbbi dátumok nem csúsznak el nem szökőévben sem.
 
 ## Támogatott kijelzők és vezérlés
 
@@ -38,6 +61,7 @@ elérhető kezeléssel.
 - ILI9488 kijelző FT6X36 kapacitív érintéssel.
 - ST7796 kijelző XPT2046 vagy FT6X36 érintéssel.
 - Guition JC3248W535C modul beépített AXS15231B kijelzővel és érintéssel.
+- FREENOVE FNK0104S modul FT6X36 kapacitív érintéssel.
 
 Az érintőképernyőről elérhető a lejátszás, a Wi-Fi-nézet, a hangerő, az
 óra/IP-cím, az időjárási nézet és a vizualizáció módja. Forgóencoderekkel az
@@ -120,9 +144,33 @@ controls accessible via a web browser.
   temperature data.
 - Volume and brightness control.
 - Wi-Fi settings and time zone management.
-- Web-based user interface in Hungarian, English, German and Polish.
+- Radio display and web interface in Hungarian, English, German and Polish.
 - Wireless
   management of stations, logos, wallpapers and other radio content.
+
+## Language selection
+
+When no language has been saved, `LANGUAGE` in `options.h` sets the default:
+`HU`, `EN`, `DE` or `PL`. The web interface's Settings / Language selector
+updates the radio and web interface together, including weekday names, dates,
+name days, weather text and the time announcement language.
+
+The selected language survives restarts and firmware updates and takes
+priority over the build-time default. Changing `options.h` alone does not
+override a saved selection. The separate time announcement language selector
+remains available. Name days automatically follow the shared language;
+the legacy `NAMEDAYS_FILE` setting no longer selects a separate calendar.
+
+All four `index_*.html`, `settings_*.html` and `search_*.html` variants follow
+the radio's saved language. Active browser tabs check the setting every
+5 seconds and also refresh it when returning from the background.
+Updating the radio requires both the firmware and the web files, including
+the new `data/web/language.js` file.
+
+The English `src/time/nameday_EN.h` contains 366 entries with English names,
+adapted from European name-day and saint-day traditions for this project.
+It is not an official UK or US calendar. All four tables include a February 29
+slot, keeping March and later dates aligned in non-leap years as well.
 
 ## Supported displays and controls
 
@@ -130,6 +178,7 @@ controls accessible via a web browser.
 - ILI9488 display with FT6X36 capacitive touch.
 - ST7796 display with XPT2046 or FT6X36 touch.
 - Guition JC3248W535C module with built-in AXS15231B display and touch.
+- FREENOVE FNK0104S display with FT6X36 capacitive touch.
 
 The touchscreen provides access to playback, the Wi-Fi view, volume, the
 clock/IP address, the weather view and visualisation mode. Using rotary encoders,
