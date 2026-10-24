@@ -1,3 +1,4 @@
+#include "../i18n/Language.h"
 #include "RadioWebServer.h"
 
 #include <HTTPClient.h>
@@ -147,9 +148,9 @@ void RadioWebServer::loop() {
 void RadioWebServer::registerRoutes() {
   server_.on("/", HTTP_GET, [this]() { serveHome(); });
   server_.on("/search", HTTP_GET,
-             [this]() { serveFile("/web/search_hu.html", "text/html"); });
+             [this]() { serveFile(String("/web/search_") + radio_.uiLanguage() + ".html", "text/html; charset=utf-8"); });
   server_.on("/settings", HTTP_GET,
-             [this]() { serveFile("/web/settings_hu.html", "text/html"); });
+             [this]() { serveFile(String("/web/settings_") + radio_.uiLanguage() + ".html", "text/html; charset=utf-8"); });
   server_.on("/style.css", HTTP_GET,
              [this]() { serveFile("/web/style.css", "text/css"); });
   server_.on("/theme.css", HTTP_GET,
@@ -163,17 +164,28 @@ void RadioWebServer::registerRoutes() {
     const String password = argument("password");
     if (!radio_.wifi().saveCredentials(ssid, password)) {
       server_.send(400, "text/plain; charset=utf-8",
-                   "A Wi-Fi beállítás nem menthető.");
+                   Language::text("A Wi-Fi beállítás nem menthető."));
       return;
     }
     server_.send(200, "text/plain; charset=utf-8",
-                 "Wi-Fi elmentve. Az eszköz újraindul.");
+                 Language::text("Wi-Fi elmentve. Az eszköz újraindul."));
     restartPending_ = true;
     restartAt_ = millis() + 800;
   });
 
   server_.on("/api/stations", HTTP_GET, [this]() { sendStations(); });
   server_.on("/api/status", HTTP_GET, [this]() { sendStatus(); });
+  server_.on("/api/language", HTTP_GET, [this]() {
+    server_.sendHeader("Cache-Control", "no-store");
+    server_.send(200, kJson, String("{\"language\":\"") + radio_.uiLanguage() + "\"}");
+  });
+  server_.on("/api/language", HTTP_POST, [this]() {
+    String language = argument("language");
+    if (language.isEmpty() && server_.hasArg("plain"))
+      language = jsonStringField(server_.arg("plain"), "language");
+    const bool ok = radio_.setUiLanguage(language);
+    server_.send(ok ? 200 : 400, kJson, ok ? "{\"ok\":true}" : "{\"ok\":false}");
+  });
   server_.on("/api/buffer", HTTP_GET, [this]() { sendBuffer(); });
   server_.on("/api/logo/current.bmp", HTTP_GET,
              [this]() { sendCurrentLogo(); });
@@ -220,7 +232,7 @@ void RadioWebServer::registerRoutes() {
     const RadioController::ClockTtsConfig clockTts = radio_.clockTtsConfig();
     const String backgroundPath = radio_.backgroundPath();
     server_.send(200, kJson,
-                 "{\"timezone\":\"" +
+                 "{\"uiLanguage\":\"" + String(radio_.uiLanguage()) + "\",\"timezone\":\"" +
                      jsonEscape(radio_.timezone()) +
                      "\",\"background\":{\"enabled\":" +
                      String(radio_.backgroundEnabled() ? "true" : "false") +
@@ -575,7 +587,7 @@ void RadioWebServer::serveFile(const String& path,
                                const String& contentType) {
   File file = LittleFS.open(path, FILE_READ);
   if (!file) {
-    server_.send(404, "text/plain; charset=utf-8", "Nincs ilyen fájl.");
+    server_.send(404, "text/plain; charset=utf-8", Language::text("Nincs ilyen fájl."));
     return;
   }
   if (path.startsWith("/web/")) {
@@ -591,12 +603,12 @@ void RadioWebServer::serveHome() {
   if (radio_.wifi().accessPointMode()) {
     serveWifiForm();
   } else {
-    serveFile("/web/index_hu.html", "text/html; charset=utf-8");
+    serveFile(String("/web/index_") + radio_.uiLanguage() + ".html", "text/html; charset=utf-8");
   }
 }
 
 void RadioWebServer::serveWifiForm() {
-  const String page =
+  String page =
       "<!doctype html><html lang='hu'><meta charset='utf-8'>"
       "<meta name='viewport' content='width=device-width,initial-scale=1'>"
       "<title>Moon Radio Wi-Fi</title><style>"
@@ -610,11 +622,16 @@ void RadioWebServer::serveWifiForm() {
       "<input name='ssid' placeholder='Hálózat neve' required>"
       "<input name='password' type='password' placeholder='Jelszó'>"
       "<button type='submit'>Mentés és újraindítás</button></form></html>";
+  page.replace("lang='hu'", String("lang='") + Language::code() + "'");
+  page.replace("Wi-Fi hálózat beállítása", Language::text("Wi-Fi hálózat beállítása"));
+  page.replace("Hálózat neve", Language::text("Hálózat neve"));
+  page.replace("Jelszó", Language::text("Jelszó"));
+  page.replace("Mentés és újraindítás", Language::text("Mentés és újraindítás"));
   server_.send(200, "text/html; charset=utf-8", page);
 }
 
 void RadioWebServer::serveUploadForm() {
-  const String page =
+  String page =
       "<!doctype html><html lang='hu'><meta charset='utf-8'>"
       "<meta name='viewport' content='width=device-width,initial-scale=1'>"
       "<title>Moon Radio fájlfeltöltés</title><style>"
@@ -632,6 +649,12 @@ void RadioWebServer::serveUploadForm() {
       "<input type='file' name='file' required>"
       "<button type='submit'>Feltöltés</button></form>"
       "<p><a href='/'>Vissza a rádióhoz</a></p></html>";
+  page.replace("lang='hu'", String("lang='") + Language::code() + "'");
+  page.replace("Moon Radio fájlfeltöltés", Language::text("Moon Radio fájlfeltöltés"));
+  page.replace("LittleFS fájlfeltöltés", Language::text("LittleFS fájlfeltöltés"));
+  page.replace("A Stations Editor a <code>/stations.txt</code> útvonalat ugyanezen a végponton használja.", Language::text("A Stations Editor a <code>/stations.txt</code> útvonalat ugyanezen a végponton használja."));
+  page.replace("Feltöltés", Language::text("Feltöltés"));
+  page.replace("Vissza a rádióhoz", Language::text("Vissza a rádióhoz"));
   server_.send(200, "text/html; charset=utf-8", page);
 }
 
@@ -743,7 +766,7 @@ void RadioWebServer::sendCurrentLogo() {
     path = "/logos/nologo.png";
   }
   if (!memoryPixels && !LittleFS.exists(path)) {
-    server_.send(404, "text/plain; charset=utf-8", "Nincs logó.");
+    server_.send(404, "text/plain; charset=utf-8", Language::text("Nincs logó."));
     return;
   }
 
@@ -780,7 +803,7 @@ void RadioWebServer::sendCurrentLogo() {
   if (!valid || width == 0 || height == 0 ||
       (!memoryPixels && file.size() != 8 + sourceBytes)) {
     if (file) file.close();
-    server_.send(404, "text/plain; charset=utf-8", "Hibás logó.");
+    server_.send(404, "text/plain; charset=utf-8", Language::text("Hibás logó."));
     return;
   }
 
@@ -1323,20 +1346,20 @@ void RadioWebServer::backgroundUploadChunk() {
     backgroundUploadFile_ = LittleFS.open(backgroundUploadPath_, FILE_WRITE);
     backgroundUploadFailed_ = !backgroundUploadFile_;
     if (backgroundUploadFailed_) {
-      backgroundUploadError_ = "Nem sikerült megnyitni a célfájlt.";
+      backgroundUploadError_ = Language::text("Nem sikerült megnyitni a célfájlt.");
     }
   } else if (upload.status == UPLOAD_FILE_WRITE) {
     backgroundUploadBytes_ += upload.currentSize;
     if (backgroundUploadBytes_ > kMaximumBackgroundUpload) {
       backgroundUploadFailed_ = true;
-      backgroundUploadError_ = "A háttérfájl túl nagy.";
+      backgroundUploadError_ = Language::text("A háttérfájl túl nagy.");
     } else if (!backgroundUploadFile_) {
       backgroundUploadFailed_ = true;
-      backgroundUploadError_ = "A célfájl nem elérhető íráshoz.";
+      backgroundUploadError_ = Language::text("A célfájl nem elérhető íráshoz.");
     } else if (backgroundUploadFile_.write(upload.buf, upload.currentSize) !=
                upload.currentSize) {
       backgroundUploadFailed_ = true;
-      backgroundUploadError_ = "Írási hiba a háttérfájl mentése közben.";
+      backgroundUploadError_ = Language::text("Írási hiba a háttérfájl mentése közben.");
     }
   } else if (upload.status == UPLOAD_FILE_END ||
              upload.status == UPLOAD_FILE_ABORTED) {
@@ -1344,7 +1367,7 @@ void RadioWebServer::backgroundUploadChunk() {
     if (upload.status == UPLOAD_FILE_ABORTED) {
       backgroundUploadFailed_ = true;
       if (backgroundUploadError_.isEmpty()) {
-        backgroundUploadError_ = "A feltöltési kapcsolat megszakadt.";
+        backgroundUploadError_ = Language::text("A feltöltési kapcsolat megszakadt.");
       }
       if (!backgroundUploadPath_.isEmpty() && LittleFS.exists(backgroundUploadPath_)) {
         LittleFS.remove(backgroundUploadPath_);
@@ -1530,7 +1553,7 @@ void RadioWebServer::artworkProxy() {
 void RadioWebServer::notFound() {
   String path = server_.uri();
   if (path.indexOf("..") >= 0) {
-    server_.send(400, "text/plain", "Hibás útvonal.");
+    server_.send(400, "text/plain", Language::text("Hibás útvonal."));
     return;
   }
   if (LittleFS.exists(path)) {
@@ -1540,7 +1563,7 @@ void RadioWebServer::notFound() {
                        true);
     server_.send(302, "text/plain", "");
   } else {
-    server_.send(404, "text/plain; charset=utf-8", "Nincs ilyen oldal.");
+    server_.send(404, "text/plain; charset=utf-8", Language::text("Nincs ilyen oldal."));
   }
 }
 
