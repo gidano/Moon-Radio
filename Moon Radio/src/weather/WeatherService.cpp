@@ -1,4 +1,5 @@
 #include "WeatherService.h"
+#include "../i18n/Language.h"
 
 #include <HTTPClient.h>
 #include <NetworkClientSecure.h>
@@ -175,6 +176,23 @@ WeatherSnapshot WeatherService::snapshot() const {
   if (xSemaphoreTake(mutex_, pdMS_TO_TICKS(20))) {
     result = snapshot_;
     xSemaphoreGive(mutex_);
+  }
+  // Stored summaries remain Hungarian; translate a copy on the main/UI thread.
+  // This updates immediately without waiting for another network request.
+  const auto language = Language::current();
+  const uint8_t lang = static_cast<uint8_t>(language);
+  if (lang != 0) {
+    static const char* const today[] = {"Ma", "Today", "Heute", "Dzisiaj"};
+    static const char* const tomorrow[] = {"Holnap", "Tomorrow", "Morgen", "Jutro"};
+    static const char* const rain[] = {"eső", "rain", "Regen", "deszczu"};
+    if (result.summary.startsWith("Ma: ")) result.summary = String(today[lang]) + result.summary.substring(2);
+    if (result.summary.startsWith("Holnap: ")) result.summary = String(tomorrow[lang]) + result.summary.substring(6);
+    result.summary.replace("% eső", String("% ") + rain[lang]);
+    static const char* const hu[] = {"É", "É-ÉK", "ÉK", "K-ÉK", "K", "K-DK", "DK", "D-DK", "D", "D-DNy", "DNy", "Ny-DNy", "Ny", "Ny-ÉNy", "ÉNy", "É-ÉNy"};
+    static const char* const en[] = {"N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"};
+    static const char* const de[] = {"N", "NNO", "NO", "ONO", "O", "OSO", "SO", "SSO", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"};
+    for (uint8_t i = 0; i < 16; ++i)
+      result.summary.replace(String("(") + hu[i] + ")", String("(") + (lang == 2 ? de[i] : en[i]) + ")");
   }
   return result;
 }
