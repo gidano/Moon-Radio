@@ -11,8 +11,8 @@
     #define ARDUINO_ESP32S3_DEV
 #endif
 
-#define LANGUAGE HU // HU PL EN DE Enter your own language here!!
-#define NAMEDAYS_FILE HU // HU PL EN DE
+#define LANGUAGE HU // HU EN DE PL: alapnyelv az elso telepiteskor; kesobb a webes valasztas az ervenyes.
+#define NAMEDAYS_FILE HU // Regi kompatibilitasi beallitas; a nevnapok a kivalasztott LANGUAGE/webes nyelvet kovetik.
 /*****************************************/
 
 /* LCD DISPLAY
