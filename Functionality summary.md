@@ -35,6 +35,25 @@ A Moon Radio ESP32-S3 alapú internetes rádió és hálózati zenelejátszó,
 - Állomások, logók, háttérképek és egyéb rádiós tartalmak vezeték nélküli
   kezelése.
 
+ ### Nyelvkezelés és névnapok
+
+- Közös HU / EN / DE / PL nyelvválasztás a webes Beállítások / Nyelv részen.
+- A választás átállítja a rádió kezelőfeliratainak, napneveinek, dátumának,
+  névnapjainak és időjárási szövegeinek nyelvét, valamint az időbemondás nyelvét.
+- A beállítás újraindítás után is megmarad. Mentett választás hiányában az
+  `options.h` fájl `LANGUAGE` értéke adja az alapnyelvet: `HU`, `EN`, `DE` vagy `PL`.
+  Egy firmware-frissítés megtartja a korábban elmentett nyelvet.
+- Az időbemondás külön nyelvválasztója továbbra is használható.
+- Mind a négy főoldal, beállítási oldal és keresési oldal követi a közös
+  nyelvet. Az aktív böngészőlapok 5 másodpercenként ellenőrzik a rádió beállítását.
+- A névnapok automatikusan a választott nyelvet követik; a korábbi
+  `NAMEDAYS_FILE` beállítás már nem választ külön névnaplistát.
+- Mind a négy névnaplista 366 napos, február 29-i bejegyzéssel. Az új
+  `src/time/nameday_EN.h` angol nevekkel készült, európai névnapi és szentnapi
+  hagyományokhoz igazított projektlista, nem hivatalos brit vagy amerikai naptár.
+- Frissítéskor a firmware mellett a webes HTML-fájlokat és az új
+  `data/web/language.js` fájlt is fel kell tölteni a rádióra. 
+
 ### Támogatott kijelzők
 
 - ILI9488 + XPT2046 érintés.
