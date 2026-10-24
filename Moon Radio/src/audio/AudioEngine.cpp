@@ -1,4 +1,5 @@
 #include "AudioEngine.h"
+#include "../i18n/Language.h"
 
 #include <HTTPClient.h>
 #include <LittleFS.h>
@@ -486,7 +487,7 @@ AudioSnapshot AudioEngine::snapshot(const String& stationName) {
   if (metadataMutex_ && xSemaphoreTake(metadataMutex_, pdMS_TO_TICKS(30))) {
     result.streamTitle = streamTitle_;
     result.codec = codec_;
-    result.statusText = statusText_;
+    result.statusText = Language::text(statusText_.c_str());
     result.stateCode = stateCode_;
     result.bitrateKbps = bitrateKbps_;
     xSemaphoreGive(metadataMutex_);
