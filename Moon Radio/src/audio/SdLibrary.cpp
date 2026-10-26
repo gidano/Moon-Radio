@@ -5,6 +5,16 @@
 #include <driver/gpio.h>
 #include "options.h"
 
+#if !(defined(SD_MMC_ENABLED) && SD_MMC_ENABLED) && \
+    defined(SDC_CS) && defined(SD_SPIPINS)
+#ifndef SD_SPI_HOST
+#define SD_SPI_HOST HSPI
+#endif
+namespace {
+SPIClass sdSpi(SD_SPI_HOST);
+}
+#endif
+
 #if defined(SD_MMC_ENABLED) && SD_MMC_ENABLED
 namespace {
 constexpr bool sdPin(int pin) {
@@ -15,6 +25,25 @@ static_assert(!sdPin(I2S_DOUT) && !sdPin(I2S_BCLK) && !sdPin(I2S_LRC),
               "SD_MMC and I2S pins must not overlap");
 }
 #endif
+
+bool SdLibrary::prepareSpiBus() {
+#if defined(SD_MMC_ENABLED) && SD_MMC_ENABLED
+  // FNK0104S uses the independent native 4-bit SD_MMC peripheral.
+  return true;
+#elif defined(SDC_CS) && defined(SD_SPIPINS)
+  if (spiPrepared_) return true;
+  const int pins[] = {SD_SPIPINS};  // SCK, MISO, MOSI, CS
+  pinMode(SDC_CS, OUTPUT);
+  digitalWrite(SDC_CS, HIGH);
+  spiPrepared_ = sdSpi.begin(pins[0], pins[1], pins[2], pins[3]);
+  Serial.printf("[sd] SPI bus prepare host=%d SCK=%d MISO=%d MOSI=%d CS=%d: %s\n",
+                SD_SPI_HOST, pins[0], pins[1], pins[2], SDC_CS,
+                spiPrepared_ ? "OK" : "FAILED");
+  return spiPrepared_;
+#else
+  return true;
+#endif
+}
 
 bool SdLibrary::normalize(String path, String& result) {
   if (path.isEmpty()) path = "/";
@@ -60,8 +89,9 @@ bool SdLibrary::mount() {
 #elif defined(SDC_CS) && defined(SD_SPIPINS)
   if (mounted_) return true;
   const int pins[] = {SD_SPIPINS}; // SCK, MISO, MOSI, CS
-  Serial.printf("[sd] SPI mount SCK=%d MISO=%d MOSI=%d CS=%d target=%lu Hz\n",
-                pins[0], pins[1], pins[2], SDC_CS, static_cast<unsigned long>(SDSPISPEED));
+  Serial.printf("[sd] SPI mount host=%d SCK=%d MISO=%d MOSI=%d CS=%d target=%lu Hz\n",
+                SD_SPI_HOST, pins[0], pins[1], pins[2], SDC_CS,
+                static_cast<unsigned long>(SDSPISPEED));
   // Mount runs in the main loop, outside display/touch transactions. Keep
   // every other device on this shared bus deselected during card startup.
 #if !DISPLAY_PROFILE_AXS15231B
@@ -83,16 +113,17 @@ bool SdLibrary::mount() {
 #endif
   pinMode(SDC_CS, OUTPUT);
   digitalWrite(SDC_CS, HIGH);
-  // Do not SPI.end() here: LovyanGFX holds the same initialized bus handle.
-  if (!SPI.begin(pins[0], pins[1], pins[2], pins[3])) {
-    Serial.println("[sd] SPI.begin FAILED");
+  // The persistent, profile-selected SPI object is prepared before display
+  // initialization so LovyanGFX and SD share the same controller and lock.
+  if (!prepareSpiBus()) {
+    Serial.println("[sd] configured SPI bus is unavailable");
     return false;
   }
-  mounted_ = SD.begin(SDC_CS, SPI, SDSPISPEED, "/sd", 6, false);
+  mounted_ = SD.begin(SDC_CS, sdSpi, SDSPISPEED, "/sd", 6, false);
   if (!mounted_ && SDSPISPEED > 1000000) {
     Serial.println("[sd] mount FAILED; retry at 1000000 Hz");
     SD.end();
-    mounted_ = SD.begin(SDC_CS, SPI, 1000000, "/sd", 6, false);
+    mounted_ = SD.begin(SDC_CS, sdSpi, 1000000, "/sd", 6, false);
   }
   if (mounted_) {
     Serial.printf("[sd] mount=OK type=%u size=%llu MiB\n",

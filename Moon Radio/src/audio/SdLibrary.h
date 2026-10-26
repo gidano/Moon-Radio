@@ -6,6 +6,7 @@
 class SdLibrary {
  public:
   struct Entry { String name; String path; bool directory; };
+  bool prepareSpiBus();
   bool mount();
   fs::FS& filesystem();
   bool list(const String& path, size_t offset, std::vector<Entry>& entries,
@@ -16,4 +17,5 @@ class SdLibrary {
   static bool supported(String path);
  private:
   bool mounted_{false};
+  bool spiPrepared_{false};
 };
