@@ -6,8 +6,9 @@
     #define ARDUINO_ESP32S3_DEV
 #endif
 
-#define LANGUAGE HU // HU EN DE PL: alapnyelv az elso telepiteskor; kesobb a webes valasztas az ervenyes.
-#define NAMEDAYS_FILE HU // Regi kompatibilitasi beallitas; a nevnapok a kivalasztott LANGUAGE/webes nyelvet kovetik.
+#define LANGUAGE HU // HU PL EN DE Enter your own language here!!
+#define NAMEDAYS_FILE HU // HU PL EN DE
+/*****************************************/
 
 /* ST7796 SPI display; the firmware rotates this to 480x320 landscape. */
 #define DSP_MODEL DSP_FNK0104S
@@ -18,32 +19,39 @@
 #define TFT_RST   -1
 #define BRIGHTNESS_PIN 45
 
-/* FT6336U capacitive touch controller. */
+/* Touch panel
+   0 = nincs erintes / encoderes vagy webes hasznalat
+   1 = erintopanel engedelyezve */
 #define TOUCH_ENABLED 1
+
+/* FT6336U capacitive touch controller. */
 #define TS_MODEL TS_MODEL_FT6X36
 #define TS_SDA 16
 #define TS_SCL 15
 #define TS_RST 18
 #define TS_INT 17
 
-/* SD card */
-#define SDC_CS    39
-#define SD_SPI_HOST FSPI
-#define SD_SPIPINS 12, 13, 11, SDC_CS
-#define SDSPISPEED 4000000
+/* FNK0104S integrated SD slot: Freenove SD_MMC 4-bit wiring. */
+#define SD_MMC_ENABLED 1
+#define SD_MMC_CLK 38
+#define SD_MMC_CMD 40
+#define SD_MMC_D0 39
+#define SD_MMC_D1 41
+#define SD_MMC_D2 48
+#define SD_MMC_D3 47
 
-/* PCM5102A recommendation: DIN=38, BCK=21, LCK/WS=47. */
-#define I2S_DOUT 38
-#define I2S_BCLK 21
-#define I2S_LRC  47
+/* PCM5102A: DIN=2, BCK=3, LCK/WS=14 (SD pins stay reserved). */
+#define I2S_DOUT 2
+#define I2S_BCLK 3
+#define I2S_LRC  14
 
 /* Encoder: A/S1=4, B/S2=6, push button=5. */
-#define ENC_BTNR 4
-#define ENC_BTNL 6
-#define ENC_BTNB 5
+//#define ENC_BTNR 4
+//#define ENC_BTNL 6
+//#define ENC_BTNB 5
 
 /* Album cover lookup */
 #define USE_LASTFM_COVER
-#define LASTFM_API_KEY "enter your API key here"    // You can register for one for free here: https://www.last.fm/api/authentication
+#define LASTFM_API_KEY "9b120bd8ad9b0cf43f7918f284bcb9d6"
 
 #include "options_internal.h"
