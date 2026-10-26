@@ -182,6 +182,7 @@ bool RadioController::begin() {
       .diagnosticsVisibleChanged = diagnosticsVisibleChangedAction,
       .prepareSelector = prepareSelectorAction,
       .sdMode = sdModeAction,
+      .toggleSource = toggleSourceAction,
       .selectorPath = selectorPathAction,
   };
 #ifdef SDC_CS
@@ -1069,6 +1070,13 @@ void RadioController::prepareSelectorAction(void* context) {
 
 bool RadioController::sdModeAction(void* context) {
   return static_cast<RadioController*>(context)->sdMode_;
+}
+
+void RadioController::toggleSourceAction(void* context) {
+  auto* radio = static_cast<RadioController*>(context);
+  const bool enableSd = !radio->sdMode_;
+  if (radio->setSdMode(enableSd) && enableSd)
+    radio->display_.openStationSelector();
 }
 
 String RadioController::selectorPathAction(void* context) {

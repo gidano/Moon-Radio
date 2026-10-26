@@ -125,6 +125,7 @@ class RadioController {
   static bool selectStationAction(void* context, size_t index);
   static void prepareSelectorAction(void* context);
   static bool sdModeAction(void* context);
+  static void toggleSourceAction(void* context);
   static String selectorPathAction(void* context);
   static void openPresetsAction(void* context);
   static void cycleWeatherModeAction(void* context);
