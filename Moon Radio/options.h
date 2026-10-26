@@ -11,19 +11,21 @@
     #define ARDUINO_ESP32S3_DEV
 #endif
 
-#define LANGUAGE HU // HU EN DE PL: alapnyelv az elso telepiteskor; kesobb a webes valasztas az ervenyes.
-#define NAMEDAYS_FILE HU // Regi kompatibilitasi beallitas; a nevnapok a kivalasztott LANGUAGE/webes nyelvet kovetik.
+#define LANGUAGE HU // HU PL EN DE Enter your own language here!!
+#define NAMEDAYS_FILE HU // HU PL EN DE
 /*****************************************/
 
 /* LCD DISPLAY
    Forditas elott pontosan egy DSP_MODEL sort hagyj aktivan. */
-// #define DSP_MODEL DSP_ILI9488
-// #define ILI9488_IPS_TUNING 1  //Mosott fekete/kontraszt javitása ILI9488 IPS panelen/Fixing washed-out blacks/contrast on the ILI9488 IPS panel
+#define DSP_MODEL DSP_ILI9488
 // #define DSP_MODEL DSP_ST7796
-#define DSP_MODEL DSP_AXS15231B  // Guition JC3248W535C, AXS15231B QSPI
+// #define DSP_MODEL DSP_AXS15231B  // Guition JC3248W535C, AXS15231B QSPI
+// #define ILI9488_IPS_TUNING 1  //Mosott fekete/kontraszt javitása ILI9488 IPS panelen
 /*****************************************/
 
-/* DISPLAY PINS AXS15231B / JC3248W535C QSPI */
+/* DISPLAY PINS
+
+   AXS15231B / JC3248W535C QSPI
 #define TFT_CS    45
 #define TFT_RST   -1
 #define TFT_SCK   47
@@ -31,9 +33,9 @@
 #define TFT_D1    48
 #define TFT_D2    40
 #define TFT_D3    39
-#define BRIGHTNESS_PIN 1
+#define BRIGHTNESS_PIN 1 */
 
-/* ILI9488 / ST7796 SPI pelda
+/* ILI9488 / ST7796 SPI pelda */
 #define TFT_DC    10
 #define TFT_CS    18
 #define TFT_RST   -1
@@ -41,7 +43,6 @@
 #define TFT_MOSI  11
 //#define TFT_MISO 13
 #define BRIGHTNESS_PIN 14
-*/
 /*****************************************/
 
 /* Touch panel
@@ -49,19 +50,19 @@
    1 = erintopanel engedelyezve */
 #define TOUCH_ENABLED 1
 
-/* AXS15231B / JC3248W535C touch */
+/* AXS15231B / JC3248W535C touch
 #define TS_MODEL TS_MODEL_AXS15231B
 #define TS_SDA 4
 #define TS_SCL 8
 #define TS_INT 3
 #define TS_RST -1
-#define TS_AXS15231_FIX
+#define TS_AXS15231_FIX */
 
-/* XPT2046 rezisztiv touch pelda
+/* XPT2046 rezisztiv touch pelda */
 #define TS_MODEL TS_MODEL_XPT2046
 #define TS_CS 42
 #define TS_MISO 13
-*/
+
 
 /* FT6X36 kapacitiv touch pelda
 #define TS_MODEL TS_MODEL_FT6X36
@@ -73,29 +74,29 @@
 /*****************************************/
 
 /* SD CARD */
-#define SDC_CS    10
+#define SDC_CS    39
 #define SD_SPI_HOST FSPI
 #define SD_SPIPINS 12, 13, 11, SDC_CS  // SCK, MISO, MOSI, CS
 #define SDSPISPEED 4000000 /* 4MHz - safer initial SD speed for JC3248W535 */
 /****************************************/
 
-/* I2S DAC - CS4344 / PCM5102A */
-#define I2S_DOUT 14
-#define I2S_BCLK 9
-#define I2S_LRC  46
+/* I2S DAC - PCM5102 - CS4344 */
+#define I2S_DOUT 38
+#define I2S_BCLK 21
+#define I2S_LRC  47
 //#define I2S_MCLK 15
 /*****************************************/
 
 /* Album cover lookup */
 #define USE_LASTFM_COVER
-#define LASTFM_API_KEY "saját API-key kell ide"    // itt regisztrálhatsz hozzá szabadon: https://www.last.fm/api/authentication
+#define LASTFM_API_KEY "9b120bd8ad9b0cf43f7918f284bcb9d6"
 /*****************************************/
 
 /* ENCODER 1 */
-#define ENC_BTNR 16 // S1
-#define ENC_BTNL 15 // S2
-#define ENC_BTNB 7  // KEY
-#define ENC_INTERNALPULLUP true
+#define ENC_BTNR 4 // S1
+#define ENC_BTNL 6 // S2
+#define ENC_BTNB 5  // KEY
+// #define ENC_INTERNALPULLUP true
 
 /* ENCODER 2 */
 // #define ENC2_BTNR 16 // S2
