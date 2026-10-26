@@ -188,6 +188,11 @@ bool RadioController::begin() {
   pinMode(SDC_CS, OUTPUT);
   digitalWrite(SDC_CS, HIGH);
 #endif
+  // SPI SD profiles prepare their selected controller before LovyanGFX.
+  // SD_MMC profiles (including FNK0104S) deliberately do nothing here.
+  if (!sdLibrary_.prepareSpiBus()) {
+    Serial.println("[sd] SPI bus preparation failed; radio mode remains available");
+  }
   display_.begin(actions);
   const InputActions inputActions{
       .context = this,
