@@ -598,6 +598,26 @@ bool DisplayManager::moveStationSelector(int8_t delta) {
 
 bool DisplayManager::stationSelectorActive() const { return selectorActive_; }
 
+bool DisplayManager::confirmStationSelector() {
+  if (!selectorActive_ || !selectorRoller_ || !actions_.selectStation) return false;
+  const size_t selected = lv_roller_get_selected(selectorRoller_);
+  hideStationSelector();
+  return actions_.selectStation(actions_.context, selected);
+}
+
+void DisplayManager::refreshStationSelector() {
+  if (presetActive_) hidePresets();
+  if (!selectorActive_) return;
+  hideStationSelector();
+  openStationSelector();
+}
+
+void DisplayManager::confirmSelectorEvent(lv_event_t* event) {
+  auto* manager = static_cast<DisplayManager*>(lv_event_get_user_data(event));
+  if (manager) manager->confirmStationSelector();
+}
+
+
 void DisplayManager::showMaintenance() {
   resetStationSelector();
   resetPresets();
@@ -825,6 +845,8 @@ void DisplayManager::showStationSelector() {
       !actions_.currentStation || !actions_.selectStation)
     return;
 
+  if (actions_.prepareSelector) actions_.prepareSelector(actions_.context);
+  const bool sd = actions_.sdMode && actions_.sdMode(actions_.context);
   const size_t count = actions_.stationCount(actions_.context);
   if (count == 0) return;
 
@@ -853,7 +875,7 @@ void DisplayManager::showStationSelector() {
   lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t* title = lv_label_create(header);
-  lv_label_set_text(title, Language::text("ÁLLOMÁSOK"));
+  lv_label_set_text(title, sd ? "SD" : Language::text("ÁLLOMÁSOK"));
   lv_obj_set_pos(title, 16, 12);
   lv_obj_set_style_text_font(title, fonts_.large(), 0);
   lv_obj_set_style_text_color(title, lv_color_hex(0xF1F5F9), 0);
@@ -866,6 +888,22 @@ void DisplayManager::showStationSelector() {
   lv_obj_set_style_text_color(selectorStatusLabel_, lv_color_hex(0x7DD3FC), 0);
   lv_obj_set_style_text_align(selectorStatusLabel_, LV_TEXT_ALIGN_RIGHT, 0);
   lv_label_set_long_mode(selectorStatusLabel_, LV_LABEL_LONG_DOT);
+
+  if (sd) {
+    if (actions_.selectorPath) {
+      const String path = actions_.selectorPath(actions_.context);
+      lv_label_set_text(selectorStatusLabel_, path.c_str());
+    }
+    lv_obj_set_width(selectorStatusLabel_, 180);
+    lv_obj_t* confirm = lv_button_create(header);
+    lv_obj_set_size(confirm, 44, 44);
+    lv_obj_set_pos(confirm, 382, 2);
+    lv_obj_add_event_cb(confirm, confirmSelectorEvent, LV_EVENT_CLICKED, this);
+    lv_obj_t* label = lv_label_create(confirm);
+    lv_label_set_text(label, LV_SYMBOL_OK);
+    lv_obj_set_style_text_font(label, fonts_.symbol(), 0);
+    lv_obj_center(label);
+  }
 
   lv_obj_t* close = lv_button_create(header);
   lv_obj_set_size(close, 48, 48);
@@ -1063,7 +1101,7 @@ void DisplayManager::showStationSelector() {
   refreshStationSelectorArc();
 
   lv_obj_t* hint = lv_label_create(selectorOverlay_);
-  lv_label_set_text(hint, Language::text("A kijelölt adó 3 másodperc múlva elindul"));
+  lv_label_set_text(hint, Language::text(sd ? "SD: pipa vagy 3 mp várakozás" : "A kijelölt adó 3 másodperc múlva elindul"));
   lv_obj_set_pos(hint, 16, 294);
   lv_obj_set_width(hint, 448);
   lv_obj_set_style_text_font(hint, fonts_.regular(), 0);

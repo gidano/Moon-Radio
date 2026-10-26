@@ -50,6 +50,8 @@ class DisplayManager {
   void openStationSelector();
   bool moveStationSelector(int8_t delta);
   bool stationSelectorActive() const;
+  bool confirmStationSelector();
+  void refreshStationSelector();
   void showMaintenance();
   void showWifiSetup(const String& address);
   void showPresets();
@@ -72,6 +74,7 @@ class DisplayManager {
   static void stationSelectorEvent(lv_event_t* event);
   static void stationArcAnimExec(void* var, int32_t value);
   static void closeSelectorEvent(lv_event_t* event);
+  static void confirmSelectorEvent(lv_event_t* event);
   static void presetModeEvent(lv_event_t* event);
   static void presetSlotEvent(lv_event_t* event);
   static void presetBankEvent(lv_event_t* event);
