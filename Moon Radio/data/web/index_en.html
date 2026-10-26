@@ -305,13 +305,12 @@
 
     </style>
     <script src="/web/language.js" defer></script>
+    <script src="/web/sd.js" defer></script>
 </head>
 <body>
     <div class="container">
         <h1>📻 Moon Radio</h1>
     <p style="margin-top:-8px">
-      <a href="/upload" style="color:#7fd; text-decoration:underline; white-space:nowrap;">File upload (SPIFFS)</a>
-      <span style="opacity:.6"> | </span>
       <a href="/web/search_en.html" style="color:#7fd; text-decoration:underline; white-space:nowrap;">🔎 Radio search</a>
       <span style="opacity:.6"> | </span>
       <a href="/web/settings_en.html" style="color:#7fd; text-decoration:underline; white-space:nowrap;">⚙️ Settings</a>
@@ -564,6 +563,7 @@
                 document.getElementById('volumeValue').innerText = volume;
                 document.getElementById('playPauseBtn').innerHTML = paused ? '▶' : '⏸';
                 updateNowPlaying(data);
+                window.updateSdState?.(data);
                 highlightCurrentStation();
                 cacheLogoViaBrowser(data);
             } catch (e) {
@@ -648,6 +648,7 @@
         }
 
         function highlightCurrentStation() {
+            if (window.moonSdMode) return;
             document.querySelectorAll('.station-btn').forEach(btn => {
                 if (btn.dataset.index == currentIndex) {
                     btn.classList.add('active');
@@ -658,6 +659,7 @@
         }
 
         function renderStationList() {
+            if (window.moonSdMode) return;
             const listDiv = document.getElementById('list');
             listDiv.innerHTML = '';
 
@@ -861,6 +863,7 @@ editBtn.onclick = (e) => {
         }
 
         function filterStations() {
+            if (window.moonSdMode) return;
             const searchText = document.getElementById('search').value.toLowerCase();
             const buttons = document.querySelectorAll('.station-btn');
             
