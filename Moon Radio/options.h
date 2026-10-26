@@ -3,7 +3,7 @@
 
 /* esp32-S3-devkit-C1 44 pins https://randomnerdtutorials.com/esp32-s3-devkitc-pinout-guide */
 
-/* HSPI (SPI 2) GPIO 11 - MOSI, GPIO 12 - CLK, GPIO 13 - MISO, GPIO 10 - CS */
+/* ESP32-S3: FSPI=SPI2, HSPI=SPI3; signals can be routed to configured GPIOs. */
 
 #pragma once
 
@@ -75,7 +75,7 @@
 
 /* SD CARD */
 #define SDC_CS    39
-#define SD_SPI_HOST FSPI
+#define SD_SPI_HOST HSPI
 #define SD_SPIPINS 12, 13, 11, SDC_CS  // SCK, MISO, MOSI, CS
 #define SDSPISPEED 4000000 /* 4MHz - safer initial SD speed for JC3248W535 */
 /****************************************/
