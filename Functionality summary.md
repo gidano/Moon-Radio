@@ -9,7 +9,7 @@ A Moon Radio ESP32-S3 alapú internetes rádió és hálózati zenelejátszó,
 
 - Internetes rádióadók és M3U lejátszási listák lejátszása.
 - Helyi zenefájlok lejátszása SD-kártyáról a FREENOVE FNK0104S beépített,
-  4 bites SD_MMC-olvasójával.
+  4 bites SD_MMC-olvasójával vagy az ILI9488/ST7796 profilok SPI-s olvasójával.
 - Mentett állomáslista, keresés, szerkesztés és presetek.
 - Lejátszás/szünet, állomásváltás és hangerőszabályzás érintéssel,
   forgóencoderrel vagy a webes felületről.
@@ -36,10 +36,11 @@ A Moon Radio ESP32-S3 alapú internetes rádió és hálózati zenelejátszó,
   a fájlnév jelenik meg. Beágyazott borító kiolvasása nincs megvalósítva.
 - A firmware a kártyát nem formázza és a zenefájlokat nem módosítja. FAT32
   használata, valamint a kártya kikapcsolt állapotban történő cseréje ajánlott.
-- A támogatott bekötés az FNK0104S natív SD_MMC busza: CLK=38, CMD=40,
-  D0=39, D1=41, D2=48, D3=47. Az ILI9488_TS panel SPI-s SD-foglalata az
-  önálló hardverpróbán sem válaszolt, ezért azon az SD-funkció jelenleg nem
-  támogatott.
+- Az FNK0104S natív SD_MMC bekötése: CLK=38, CMD=40, D0=39, D1=41, D2=48,
+  D3=47. Az ILI9488_TS SPI-s olvasója SCK=12, MISO=13, MOSI=11 és CS=39
+  bekötéssel működik; a kijelzővel és az XPT2046 érintővel közös HSPI/SPI3
+  buszt, de külön chip-select jelet használ. Az ILI9488 érintés nélküli és az
+  ST7796 profil ugyanezt az SD-konfigurációt tartalmazza.
 
 ## Kijelző és információk
 
@@ -80,7 +81,7 @@ A Moon Radio ESP32-S3 alapú internetes rádió és hálózati zenelejátszó,
 
 ## Támogatott kijelzők
 
-- ILI9488 + XPT2046 érintés.
+- ILI9488 + XPT2046 érintés és támogatott SPI-s SD-olvasó.
 - ILI9488 + FT6X36 kapacitív érintés.
 - ST7796 + XPT2046 vagy FT6X36 érintés.
 - Guition JC3248W535C modul beépített AXS15231B kijelzővel és érintéssel.
@@ -100,7 +101,7 @@ touchscreen and browser-based control.
 
 - Playback of internet radio stations and M3U playlists.
 - Local music playback from the FREENOVE FNK0104S integrated 4-bit SD_MMC
-  card reader.
+  reader or the SPI reader configured by the ILI9488/ST7796 profiles.
 - Saved station list, search, editing and presets.
 - Play/pause, station selection and volume control from touch, rotary
   encoders or the browser interface.
@@ -128,10 +129,11 @@ touchscreen and browser-based control.
   is not implemented.
 - The firmware does not format the card or modify music files. FAT32 is
   recommended, and cards should be inserted or changed while powered off.
-- The supported wiring is the FNK0104S native SD_MMC bus: CLK=38, CMD=40,
-  D0=39, D1=41, D2=48 and D3=47. The ILI9488_TS SPI card slot did not respond
-  during an isolated hardware probe, so SD playback is currently unsupported
-  on that panel.
+- The FNK0104S native SD_MMC wiring is CLK=38, CMD=40, D0=39, D1=41, D2=48
+  and D3=47. The ILI9488_TS SPI reader uses SCK=12, MISO=13, MOSI=11 and
+  CS=39; it shares HSPI/SPI3 with the display and XPT2046 touch controller,
+  using separate chip-select signals. The ILI9488 no-touch and ST7796 profiles
+  contain the same SD configuration.
 
 ## Display and information
 
@@ -174,7 +176,7 @@ touchscreen and browser-based control.
 
 ## Supported displays
 
-- ILI9488 with XPT2046 touch.
+- ILI9488 with XPT2046 touch and a supported SPI SD reader.
 - ILI9488 with FT6X36 capacitive touch.
 - ST7796 with XPT2046 or FT6X36 touch.
 - Guition JC3248W535C module with built-in AXS15231B display and touch.

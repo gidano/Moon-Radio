@@ -21,7 +21,8 @@ elérhető kezeléssel.
 
 - Internetes rádióadók és helyi hálózati M3U lejátszási listák lejátszása.
 - Helyi zenelejátszás SD-kártyáról a FREENOVE FNK0104S beépített
-  SD_MMC-olvasójával, mappa- és fájlböngészéssel.
+  SD_MMC-olvasójával vagy az ILI9488/ST7796 profilok SPI-s olvasójával,
+  mappa- és fájlböngészéssel.
 - Mentett állomáslista, állomáskeresés, szerkesztés és presetek.
 - Állomáslogó, valamint elérhető daladatok alapján megjelenő albumborító.
 - Sztereó VU, spektrum vagy kikapcsolt alsó kijelzősáv.
@@ -59,7 +60,7 @@ vagy amerikai névnaptár. Mind a négy táblázat tartalmaz február 29-i helye
 
 ## Támogatott kijelzők és vezérlés
 
-- ILI9488 kijelző XPT2046 érintéssel.
+- ILI9488 kijelző XPT2046 érintéssel és támogatott SPI-s SD-olvasóval.
 - ILI9488 kijelző FT6X36 kapacitív érintéssel.
 - ST7796 kijelző XPT2046 vagy FT6X36 érintéssel.
 - Guition JC3248W535C modul beépített AXS15231B kijelzővel és érintéssel.
@@ -73,10 +74,9 @@ Az érintőképernyőről elérhető a lejátszás, a Wi-Fi-nézet, a hangerő, 
 Az SD-forrás a készülék kijelzőjén és mind a négy nyelvű webes felületen
 kiválasztható. SD-módban az állomáslista helyén a kártya könyvtárai és
 lejátszható fájljai jelennek meg. A részletes használat és a támogatott
-formátumok az **SD-zenelejátszás – FNK0104S** fejezetben találhatók.
-Az ILI9488_TS modul SPI-s SD-foglalata a jelenlegi hardveren nem válaszolt
-az önálló SD-próbára, ezért ehhez a paneltípushoz az SD-kezelés nem tekinthető
-támogatottnak.
+formátumok az **SD-zenelejátszás – támogatott olvasók** fejezetben találhatók.
+Az ILI9488_TS modul SPI-s SD-foglalata, a kijelző és az XPT2046 érintő közös
+HSPI/SPI3 buszon működik, külön chip-select vezetékekkel.
 
 ## Mit mutat a rádió?
 
@@ -130,14 +130,18 @@ PC-n lévő zenei mappák hálózati streameléséhez használható kiegészít�
 Android rendszerű eszközről történő webes irányításhoz, készülékmentéssel:
 [YoRadio Controller](https://github.com/gidano/YoRadio-Controller)
 
-## SD-zenelejátszás – FNK0104S
+## SD-zenelejátszás – támogatott olvasók
 
-A beépített olvasó a Freenove gyári példái szerinti, 4 bites
-SD_MMC buszt használja: CLK=38, CMD=40, D0=39, D1=41,
-D2=48, D3=47. A kijelző SPI-buszától független. Az `options.h` és az
-`options.h_FNK0104S` ezt a bekötést tartalmazza. A korábbi SPI/CS=39
-beállítás nem a panel beépített olvasójának bekötése. Az I2S marad
-DIN=2, BCK=3, WS=14; a 38-as és 47-es láb SD mellett nem használható hangkimenetre.
+Az FNK0104S beépített olvasója a Freenove gyári példái szerinti, 4 bites
+SD_MMC buszt használja: CLK=38, CMD=40, D0=39, D1=41, D2=48, D3=47.
+A kijelző SPI-buszától független; az `options.h_FNK0104S` tartalmazza ezt a
+bekötést. Az I2S marad DIN=2, BCK=3, WS=14; a 38-as és 47-es láb SD mellett
+nem használható hangkimenetre.
+
+Az ILI9488_TS SPI-s olvasója SCK=12, MISO=13, MOSI=11 és CS=39 bekötéssel
+működik. A kijelző, az XPT2046 érintő és az SD ugyanazt a HSPI/SPI3 vezérlőt
+használja, saját chip-select jelekkel. Ezt az `options.h_ILI9488_TS`, az
+ILI9488 érintés nélküli profilja és az ST7796 profil is tartalmazza.
 
 - A webes fő-, keresési és beállítási oldalakon a **SD-kártya** jelvény választja
   ki az SD-forrást. A főoldalon az állomások helyén mappák és zenefájlok jelennek meg.
@@ -200,8 +204,9 @@ controls accessible via a web browser.
 ## Key features
 
 - Plays internet radio stations and local network M3U playlists.
-- Plays local music from the FREENOVE FNK0104S integrated SD_MMC card reader,
-  including folder and file browsing.
+- Plays local music from the FREENOVE FNK0104S integrated SD_MMC reader or
+  the SPI card reader configured by the ILI9488/ST7796 profiles, including
+  folder and file browsing.
 - Saved station list, station search, editing and presets.
 - Station logos and album covers displayed based on available track data.
 - Stereo VU, spectrum or disabled bottom display bar.
@@ -240,7 +245,7 @@ slot, keeping March and later dates aligned in non-leap years as well.
 
 ## Supported displays and controls
 
-- ILI9488 display with XPT2046 touch.
+- ILI9488 display with XPT2046 touch and a supported SPI SD reader.
 - ILI9488 display with FT6X36 capacitive touch.
 - ST7796 display with XPT2046 or FT6X36 touch.
 - Guition JC3248W535C module with built-in AXS15231B display and touch.
@@ -253,9 +258,9 @@ station selection, volume and playback can also be controlled.
 
 The SD source can be selected on the device and on every localized web page.
 In SD mode, folders and playable files replace the station list. See
-**SD playback – FNK0104S** below for controls and supported formats.
-The SPI SD slot of the ILI9488_TS module did not respond during an isolated
-hardware probe and is therefore not considered supported on that panel.
+**SD playback – supported readers** below for controls and supported formats.
+The ILI9488_TS SPI card slot, display and XPT2046 touch controller share the
+HSPI/SPI3 bus and use separate chip-select signals.
 
 ## What does the radio display?
 
@@ -311,11 +316,17 @@ For web-based control from an Android device, with device backup:
 [YoRadio Controller](https://github.com/gidano/YoRadio-Controller)
 
 
-## SD playback – FNK0104S
+## SD playback – supported readers
 
 The integrated slot uses Freenove's native 4-bit SD_MMC wiring:
 CLK=38, CMD=40, D0=39, D1=41, D2=48, D3=47. It does not share the display SPI bus.
-Keep I2S on DIN=2, BCK=3, WS=14. Select **SD card** on any localized web control
+Keep I2S on DIN=2, BCK=3, WS=14.
+
+The ILI9488_TS SPI reader uses SCK=12, MISO=13, MOSI=11 and CS=39. The display,
+XPT2046 touch controller and SD reader share HSPI/SPI3 with separate chip-select
+signals. The ILI9488 no-touch and ST7796 profiles use the same SD configuration.
+
+Select **SD card** on any localized web control
 page, browse a folder on the home page and select a music file. Previous/next
 and automatic advance cycle through that folder by filename. **Radio** restores
 the selected station. Directory pages contain 64 entries; search filters loaded
@@ -325,7 +336,6 @@ the existing album-cover lookup is used; otherwise the SD logo stays visible.
 Embedded local cover extraction is not implemented. FAT32 is recommended;
 insert/change cards with power off. SD playback works offline. Upload both the
 firmware and the changed web assets, including `sd.js`, and retain `sd_card.png`.
-Hardware playback and cover retrieval still require testing on the physical board.
 
 
 ### SD fixes: lyrics and status messages
