@@ -1,3 +1,4 @@
+#include "id3_lyrics.hpp"
 
 /*****************************************************************************************************************************************************
     Audio.cpp
@@ -1064,10 +1065,12 @@ bool Audio::connecttoFS(fs::FS& fs, const char* path, int32_t fileStartTime) {
     if (c_path.ends_with_icase(".mp3")) m_codec = CODEC_MP3;
     if (c_path.ends_with_icase(".m4a")) m_codec = CODEC_M4A;
     if (c_path.ends_with_icase(".aac")) m_codec = CODEC_AAC;
+    if (c_path.ends_with_icase(".aacp")) m_codec = CODEC_AAC;
     if (c_path.ends_with_icase(".wav")) m_codec = CODEC_WAV;
     if (c_path.ends_with_icase(".flac")) m_codec = CODEC_FLAC;
     if (c_path.ends_with_icase(".opus")) m_codec = CODEC_OPUS;
     if (c_path.ends_with_icase(".vor")) m_codec = CODEC_VORBIS;
+    if (c_path.ends_with_icase(".vorbis")) m_codec = CODEC_VORBIS;
     if (c_path.ends_with_icase(".ogg")) m_codec = CODEC_OGG;
     if (c_path.ends_with_icase(".oga")) m_codec = CODEC_OGG;
 
@@ -1924,6 +1927,23 @@ int Audio::read_FLAC_Header(uint8_t* data, size_t len) {
 }
 //*************************************************************************************************************
 
+void Audio::readSynchronizedLyrics(const uint8_t* data, size_t size) {
+    const size_t count = id3::synchronizedLyrics(data, size,
+        [&](id3::TextRange line, uint8_t encoding, bool bigEndian, uint32_t timestamp) {
+            // Converters expect terminators; append both bytes for UTF-16.
+            std::vector<uint8_t> text(line.size + 2, 0);
+            memcpy(text.data(), data + line.begin, line.size);
+            ps_ptr<char> converted;
+            if (encoding == 0) converted.copy_from_iso8859_1(text.data());
+            else if (encoding == 3) converted.copy_from(reinterpret_cast<const char*>(text.data()));
+            else converted.copy_from_utf16(text.data(), bigEndian);
+            if (converted.starts_with("\n")) converted.remove_before(1);
+            m_syltLines.push_back(std::move(converted));
+            m_syltTimeStamp.push_back(timestamp);
+        });
+    if (count) info(*this, evt_info, "audiofile contains synchronized lyrics");
+}
+
 int Audio::read_ID3_Header(uint8_t* data, size_t len) {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (m_controlCounter == MP3_BEGIN) { /* read ID3 tag and ID3 header size */
@@ -2091,7 +2111,9 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
             return 0;
         }
 
-        if (startsWith(m_ID3Hdr.tag, "SYLT") || startsWith(m_ID3Hdr.tag, "USLT")) { // any lyrics embedded in file, passing it to external function
+        if (startsWith(m_ID3Hdr.tag, "USLT")) return 0; // Untimed lyrics: MP3_SKIP consumes the frame.
+
+        if (startsWith(m_ID3Hdr.tag, "SYLT")) { // Only SYLT carries text/timestamp pairs.
             m_controlCounter = MP3_SYLT;
             return 0;
         }
@@ -2175,66 +2197,16 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
         return fs;
     }
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    if (m_controlCounter == MP3_SYLT) { // SYLT
+    if (m_controlCounter == MP3_SYLT) {
         m_controlCounter = MP3_SKIP;
-        if (m_dataMode == AUDIO_LOCALFILE || (m_streamType == ST_WEBFILE)) {
-            ps_ptr<char> tmp;
-            ps_ptr<char> content_descriptor;
-            ps_ptr<char> syltBuff;
-            bool         isBigEndian = true;
-            size_t       len = 0;
-            int          idx = 0;
-            m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
-            m_ID3Hdr.SYLT.size = m_ID3Hdr.framesize;
-            if (m_ID3Hdr.SYLT.size < len) return 0;
-            syltBuff.copy_from((const char*)data, m_ID3Hdr.SYLT.size);
-            m_ID3Hdr.SYLT.text_encoding = syltBuff[0]; // 0=ISO-8859-1, 1=UTF-16, 2=UTF-16BE, 3=UTF-8
-            if (m_ID3Hdr.SYLT.text_encoding == 1) isBigEndian = false;
-            if (m_ID3Hdr.SYLT.text_encoding > 3) {
-                AUDIO_LOG_ERROR("unknown text encoding: {}", m_ID3Hdr.SYLT.text_encoding);
-                m_ID3Hdr.SYLT.text_encoding = 0;
-            }
-            char encodingTab[4][12] = {"ISO-8859-1", "UTF-16", "UTF-16BE", "UTF-8"};
-            memcpy(m_ID3Hdr.SYLT.lang, syltBuff.get() + 1, 3);
-            m_ID3Hdr.SYLT.lang[3] = '\0';
-            info(*this, evt_info, "Lyrics: text_encoding: {}, language: {}, size {}", encodingTab[m_ID3Hdr.SYLT.text_encoding], m_ID3Hdr.SYLT.lang, m_ID3Hdr.SYLT.size);
-            m_ID3Hdr.SYLT.time_stamp_format = syltBuff[4];
-            m_ID3Hdr.SYLT.content_type = syltBuff[5];
-            idx = 6;
-            uint16_t cd_len = 0;
-            if (m_ID3Hdr.SYLT.text_encoding == 0)
-                cd_len = 1 + content_descriptor.copy_from_iso8859_1((const uint8_t*)(syltBuff.get() + idx)); // iso8859_1
-            else if (m_ID3Hdr.SYLT.text_encoding == 3)
-                cd_len = 1 + content_descriptor.copy_from((const char*)(syltBuff.get() + idx)); // utf-8
-            else
-                cd_len = 2 + content_descriptor.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian); // utf-16
-            if (cd_len > 2) info(*this, evt_info, "Lyrics: content_descriptor: {}", content_descriptor.c_get());
-
-            idx += cd_len;
-            while (idx < m_ID3Hdr.SYLT.size) {
-                if (m_ID3Hdr.SYLT.text_encoding == 0)
-                    idx += 1 + tmp.copy_from_iso8859_1((const uint8_t*)syltBuff.get() + idx); // ISO8859_1
-                else if (m_ID3Hdr.SYLT.text_encoding == 3)
-                    idx += 1 + tmp.copy_from((const char*)syltBuff.get() + idx); // UTF-8
-                else
-                    idx += 2 + tmp.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian); // UTF-16LE, UTF-16BE
-
-                if (tmp.starts_with("\n")) tmp.remove_before(1);
-                m_syltLines.push_back(std::move(tmp));
-                if (idx + 4 > m_ID3Hdr.SYLT.size) break; // no more 4 bytes?
-                uint32_t timestamp = bigEndian((uint8_t*)syltBuff.get() + idx, 4);
-                m_syltTimeStamp.push_back(timestamp);
-                idx += 4;
-            }
-            info(*this, evt_info, "audiofile contains synchronized lyrics");
-            // for(int i = 0; i < m_syltLines.size(); i++){
-            //     info(*this, evt_lyrics, "{:07} ms,   {}", m_syltTimeStamp[i], m_syltLines[i].c_get());
-            // }
+        // Oversized/incomplete optional lyrics are skipped, never read past the
+        // current ring-buffer window. MP3_SKIP still consumes the full frame.
+        if ((m_dataMode == AUDIO_LOCALFILE || m_streamType == ST_WEBFILE) &&
+            m_ID3Hdr.framesize <= len) {
+            readSynchronizedLyrics(data, m_ID3Hdr.framesize);
         }
         return 0;
     }
-
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     // --- section V2.2 only , higher Vers above ----
     // see https://mutagen-specs.readthedocs.io/en/latest/id3/id3v2.2.html
@@ -2277,63 +2249,11 @@ int Audio::read_ID3_Header(uint8_t* data, size_t len) {
 
             m_ID3Hdr.APIC_vec.push_back(pic_start + 6);
             m_ID3Hdr.APIC_vec.push_back(pic_len);
-        } else if (startsWith(m_ID3Hdr.tag, "SLT")) { // lyrics embedded in header
-            if (m_dataMode == AUDIO_LOCALFILE) {
-
-                ps_ptr<char> tmp;
-                ps_ptr<char> content_descriptor;
-                ps_ptr<char> syltBuff;
-                bool         isBigEndian = true;
-                size_t       len = 0;
-                int          idx = 0;
-
-                m_ID3Hdr.SYLT.pos = m_ID3Hdr.id3Size - m_ID3Hdr.remainingHeaderBytes;
-                m_ID3Hdr.SYLT.size = m_ID3Hdr.v22_tag_length;
-                if (m_ID3Hdr.SYLT.size < len) return 0;
-                syltBuff.copy_from((const char*)data, m_ID3Hdr.SYLT.size);
-                m_ID3Hdr.SYLT.text_encoding = syltBuff[0];
-                memcpy(m_ID3Hdr.SYLT.lang, syltBuff.get() + 1, 3);
-                m_ID3Hdr.SYLT.lang[3] = '\0';
-                info(*this, evt_info, "Lyrics: text_encoding: {}, language: {}, size {}",
-                     m_ID3Hdr.SYLT.text_encoding == 0   ? "ASCII"
-                     : m_ID3Hdr.SYLT.text_encoding == 3 ? "UTF-8"
-                                                        : "?",
-                     m_ID3Hdr.SYLT.lang, m_ID3Hdr.SYLT.size);
-                m_ID3Hdr.SYLT.time_stamp_format = syltBuff[4];
-                m_ID3Hdr.SYLT.content_type = syltBuff[5];
-
-                idx = 6;
-
-                if (m_ID3Hdr.SYLT.text_encoding == 0 || m_ID3Hdr.SYLT.text_encoding == 3) { // utf-8
-                    len = content_descriptor.copy_from((const char*)(syltBuff.get() + idx));
-                } else { // utf-16
-                    len = content_descriptor.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian);
-                }
-                if (len > 2) info(*this, evt_info, "Lyrics: content_descriptor: {}", content_descriptor.c_get());
-                idx += len;
-
-                while (idx < m_ID3Hdr.SYLT.size) {
-                    // UTF-16LE, UTF-16BE
-                    if (m_ID3Hdr.SYLT.text_encoding == 1 || m_ID3Hdr.SYLT.text_encoding == 2) {
-                        idx += tmp.copy_from_utf16((const uint8_t*)(syltBuff.get() + idx), isBigEndian);
-                    } else {
-                        // ISO-8859-1 / UTF-8
-                        idx += tmp.copy_from((const char*)syltBuff.get() + idx);
-                    }
-                    if (tmp.starts_with("\n")) tmp.remove_before(1);
-                    m_syltLines.push_back(std::move(tmp));
-
-                    if (idx + 4 > m_ID3Hdr.SYLT.size) break; // no more 4 bytes?
-
-                    uint32_t timestamp = bigEndian((uint8_t*)syltBuff.get() + idx, 4);
-                    m_syltTimeStamp.push_back(timestamp);
-
-                    idx += 4;
-                }
-                info(*this, evt_info, "audiofile contains synchronized lyrics");
-                // for(int i = 0; i < m_syltLines.size(); i++){
-                //     info(*this, evt_lyrics, "{:07} ms,   {}", m_syltTimeStamp[i], m_syltLines[i].c_get());
-                // }
+        } else if (tag.starts_with("SLT")) {
+            // ID3v2.2 uses a six-byte frame header; the parser takes payload only.
+            if (m_dataMode == AUDIO_LOCALFILE && m_ID3Hdr.v22_tag_length >= 6 &&
+                m_ID3Hdr.v22_tag_length <= len) {
+                readSynchronizedLyrics(data + 6, m_ID3Hdr.v22_tag_length - 6);
             }
         } else {
             showID3Tag(tag.c_get(), value.c_get());
@@ -5736,6 +5656,7 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t samples_decoder
 
     // if(m_dataMode != AUDIO_LOCALFILE && m_streamType != ST_WEBFILE) return; //guard
 
+    const size_t lyricCount = id3::lyricPairCount(m_syltLines.size(), m_syltTimeStamp.size());
     float audioCurrentTime = 0.0;
 
     if (m_cat.firstCall) { // first call
@@ -5802,8 +5723,8 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t samples_decoder
         m_cat.sumBytesIn = posWhithinAudioBlock;
         m_haveNewFilePos = 0;
         m_cat.syltIdx = 0;
-        if (m_syltLines.size()) {
-            while (m_cat.syltIdx < m_syltLines.size()) {
+        if (lyricCount) {
+            while (m_cat.syltIdx < lyricCount) {
                 if (m_audioCurrentTime * 1000 < m_syltTimeStamp[m_cat.syltIdx]) break;
                 m_cat.syltIdx++;
             }
@@ -5811,9 +5732,9 @@ void Audio::calculateAudioTime(uint16_t bytesDecoderIn, uint16_t samples_decoder
         }
     }
 
-    if (m_syltLines.size()) {
+    if (lyricCount) {
         //  AUDIO_LOG_INFO("{}", audioCurrentTime * 1000); // ms
-        if (m_cat.syltIdx >= m_syltLines.size()) return;
+        if (m_cat.syltIdx >= lyricCount) return;
         if (m_audioCurrentTime * 1000 > m_syltTimeStamp[m_cat.syltIdx]) {
             info(*this, evt_lyrics, "{}", m_syltLines[m_cat.syltIdx].c_get());
             m_cat.syltIdx++;

@@ -240,6 +240,7 @@ class Audio {
     int                      read_WAV_Header(uint8_t* data, size_t len);
     int                      read_FLAC_Header(uint8_t* data, size_t len);
     int                      read_ID3_Header(uint8_t* data, size_t len);
+    void                     readSynchronizedLyrics(const uint8_t* data, size_t size);
     int                      read_M4A_Header(uint8_t* data, size_t len);
     size_t                   process_m3u8_ID3_Header(uint8_t* packet);
     bool                     setSampleRate(uint32_t hz);
