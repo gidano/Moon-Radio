@@ -170,30 +170,6 @@ ILI9488 érintés nélküli profilja és az ST7796 profil is tartalmazza.
   javasolt. A firmware nem formázza a kártyát és nem ír a zenefájlokba.
   Az SD-lejátszás nem igényel internetet; induláskor a készülék rádiómódban marad.
 
-Frissítéskor a firmware mellett az összes módosult `data/web/index_*.html`,
-`search_*.html`, `settings_*.html` és az új `data/web/sd.js` is szükséges.
-A meglévő `data/logos/sd_card.png` fájlnak szintén a készüléken kell lennie.
-Az SD-fájlok a kártyán maradnak, nem a LittleFS adatpartíciójára kerülnek.
-
-Ellenőrzés: `pio run`, `node tools/check_languages.cjs`, valamint Playwrighttal
-`node tools/check_sd_ui.cjs` (Edge, szimulált rádióválaszokkal).
-A fizikai SD-olvasást, a hangot és a borítóletöltést a panelen is ellenőrizni kell.
-
-### SD-javítások: dalszöveg és állapotüzenetek
-
-A `MP3Decoder has been destroyed/initialized` üzenetek a soros naplóban
-megmaradnak, de nem írják felül a kijelzett állapotot. Az `ed5bc0e97...`
-ELF-hez tartozó, `0x4206e116` című összeomlás az `Audio::calculateAudioTime`
-dalszöveg-időbélyeg olvasásánál történt: szövegsor létezett, időbélyeg nem.
-A javítás külön kezeli az időzítés nélküli USLT és az időzített SYLT adatot;
-csak teljes szöveg/időbélyeg-párokat fogad el, ellenőrzi a kerethatárokat,
-és az időszámításban is mindkét táblázat méretéhez igazodik. Az opcionális,
-hiányos vagy túl nagy dalszöveg átugorható a zene és az előadó/cím megtartásával.
-A `tools/check_id3_lyrics.cpp` C++20 fordításkori tesztjei teljes, csonkolt,
-UTF-8 és UTF-16 adatokat, hiányzó időbélyeget és eltérő táblaméreteket fednek le.
-A javított fájl lejátszását a fizikai panelen még ellenőrizni kell.
-
-
 ---
 
 # Moon Radio – English
@@ -337,20 +313,4 @@ Embedded local cover extraction is not implemented. FAT32 is recommended;
 insert/change cards with power off. SD playback works offline. Upload both the
 firmware and the changed web assets, including `sd.js`, and retain `sd_card.png`.
 
-
-### SD fixes: lyrics and status messages
-
-The `MP3Decoder has been destroyed/initialized` messages remain available
-in the serial log but no longer overwrite the displayed status. The crash at
-`0x4206e116` in the `ed5bc0e97...` ELF occurred while
-`Audio::calculateAudioTime` was reading lyric timestamps: a text line
-existed without a matching timestamp.
-
-The fix handles untimed USLT and synchronized SYLT data separately, accepts
-only complete text/timestamp pairs, checks frame boundaries and limits time
-calculation to the available entries in both tables. Optional, incomplete or
-oversized lyrics can be skipped while preserving playback and artist/title
-metadata. The C++20 compile-time tests in `tools/check_id3_lyrics.cpp` cover
-complete and truncated data, UTF-8 and UTF-16 text, missing timestamps and
-mismatched table sizes. Playback of the corrected file still requires
-verification on the physical panel.
+---
