@@ -1,4 +1,4 @@
-# Screenshot / Képernyőképek
+# Képernyőképek
 
 <div align="center">
 
@@ -20,6 +20,8 @@ elérhető kezeléssel.
 ## Főbb funkciók
 
 - Internetes rádióadók és helyi hálózati M3U lejátszási listák lejátszása.
+- Helyi zenelejátszás SD-kártyáról a FREENOVE FNK0104S beépített
+  SD_MMC-olvasójával, mappa- és fájlböngészéssel.
 - Mentett állomáslista, állomáskeresés, szerkesztés és presetek.
 - Állomáslogó, valamint elérhető daladatok alapján megjelenő albumborító.
 - Sztereó VU, spektrum vagy kikapcsolt alsó kijelzősáv.
@@ -61,11 +63,20 @@ vagy amerikai névnaptár. Mind a négy táblázat tartalmaz február 29-i helye
 - ILI9488 kijelző FT6X36 kapacitív érintéssel.
 - ST7796 kijelző XPT2046 vagy FT6X36 érintéssel.
 - Guition JC3248W535C modul beépített AXS15231B kijelzővel és érintéssel.
-- FREENOVE FNK0104S modul FT6X36 kapacitív érintéssel.
+- FREENOVE FNK0104S modul FT6X36 kapacitív érintéssel és támogatott,
+  beépített SD_MMC-olvasóval.
 
 Az érintőképernyőről elérhető a lejátszás, a Wi-Fi-nézet, a hangerő, az
 óra/IP-cím, az időjárási nézet és a vizualizáció módja. Forgóencoderekkel az
 állomásválasztás, a hangerő és a lejátszás is kezelhető.
+
+Az SD-forrás a készülék kijelzőjén és mind a négy nyelvű webes felületen
+kiválasztható. SD-módban az állomáslista helyén a kártya könyvtárai és
+lejátszható fájljai jelennek meg. A részletes használat és a támogatott
+formátumok az **SD-zenelejátszás – FNK0104S** fejezetben találhatók.
+Az ILI9488_TS modul SPI-s SD-foglalata a jelenlegi hardveren nem válaszolt
+az önálló SD-próbára, ezért ehhez a paneltípushoz az SD-kezelés nem tekinthető
+támogatottnak.
 
 ## Mit mutat a rádió?
 
@@ -81,13 +92,14 @@ böngészős kezelőfelület a kijelzőn látható IP-címen érhető el.
 
 ## Kapcsolódó eszközök
 
-A Moon Radio használható állomáslista-szerkesztővel, vezeték nélküli
-fájlkezelővel és számítógépes zenemappák streamelésére szolgáló kiegészítővel.
+A Moon Radio használható vezeték nélküli fájlkezelővel és számítógépes
+zenemappák streamelésére szolgáló kiegészítővel.
 
 ## LittleFS File Manager Wi-Fi v0.6.0-kapcsolat
 
-A firmware kompatibilis a
-`WiFi_manager_v0.6.0` csomagban lévő Wi‑Fi Partition Managerrel.
+A firmware fájllistázási, letöltési és törlési végpontjait a
+`WiFi_manager_v0.6.0` csomagban lévő Wi‑Fi Partition Manager is használhatja.
+Általános fájlfeltöltéshez használd a soros `uploadfs` műveletet.
 A programban válaszd a **WiFi / IP** kapcsolatot, majd add meg a kijelzőn
 látható rádió-IP-címet (később az LVGL Radio feliratot érintve hívható elő).
 Portot vagy külön útvonalat nem kell megadni.
@@ -98,15 +110,13 @@ Ajánlott kiegészítő partíciófájlok Wi-Fi-s kezeléséhez:
 Wi‑Fi-n elérhető műveletek:
 
 - teljes LittleFS könyvtárfa listázása;
-- fájlok feltöltése és letöltése;
+- fájlok letöltése;
 - könyvtárak létrehozása és törlése;
 - fájlok törlése;
 - a rádió újraindítása.
 
-Ezzel az egyes fájlok módosításához nincs szükség külön soros
-`uploadfs` feltöltésre.
-Ha viszont a teljes helyi `data` mappát szeretnéd egyszerre újraírni,
-az `uploadfs` továbbra is használható.
+A helyi `data` mappa tartalmát soros `uploadfs` művelettel lehet feltölteni.
+A webes háttérkép- és logókezelés saját feltöltési funkciót használ.
 A Wi‑Fi fájlkezelő csatlakozásakor a rádió biztonsági karbantartási módba
 lép: leáll a lejátszás és az LVGL-frissítés, így a használatban lévő
 fontok és cache-fájlok is cserélhetők. A munka végén használd a Partition
@@ -114,21 +124,75 @@ Manager **Újraindítás** parancsát a normál rádiómód visszaállításáho
 A fájlkezelő API a helyi hálózaton nincs jelszóval védve, ezért csak
 megbízható hálózaton használd.
 
-Ajánlott kiegészítő állomáslista Wi-Fi-s kezeléséhez:
-[myRadio Stations Editor](https://github.com/gidano/myRadio-Stations-Editor)
-
 PC-n lévő zenei mappák hálózati streameléséhez használható kiegészítő:
 [myRadio Music Server](https://github.com/gidano/myRadio-Music-Server)
 
 Android rendszerű eszközről történő webes irányításhoz, készülékmentéssel:
 [YoRadio Controller](https://github.com/gidano/YoRadio-Controller)
 
+## SD-zenelejátszás – FNK0104S
+
+A beépített olvasó a Freenove gyári példái szerinti, 4 bites
+SD_MMC buszt használja: CLK=38, CMD=40, D0=39, D1=41,
+D2=48, D3=47. A kijelző SPI-buszától független. Az `options.h` és az
+`options.h_FNK0104S` ezt a bekötést tartalmazza. A korábbi SPI/CS=39
+beállítás nem a panel beépített olvasójának bekötése. Az I2S marad
+DIN=2, BCK=3, WS=14; a 38-as és 47-es láb SD mellett nem használható hangkimenetre.
+
+- A webes fő-, keresési és beállítási oldalakon a **SD-kártya** jelvény választja
+  ki az SD-forrást. A főoldalon az állomások helyén mappák és zenefájlok jelennek meg.
+- Nyisd meg a kívánt mappát, majd kattints a zenére. A lista 64 bejegyzésenként
+  tölthető tovább. A keresés az addig betöltött bejegyzésekben keres.
+- A szünet és a hangerő változatlanul használható. Az előző/következő gombok
+  SD-módban az aktuális mappa zenéi között lépnek, fájlnév szerinti sorrendben.
+  A szám végén a következő indul, a mappa végén az elsőre ugrik vissza.
+  A **Rádió** jelvény visszavált az utoljára kiválasztott rádióállomásra.
+- A készülék saját kijelzőjén SD-módban az SD/állomásnévre koppintva,
+  a szokásos listanyitó gesztussal vagy az encoder hosszú gombnyomásával
+  az SD-választó nyílik meg. A `[+]` sorok mappák; a `[..]` sor egy szinttel
+  visszalép. A fájlnév kiválasztása lejátszást indít. A pipa vagy az encoder
+  rövid gombnyomása azonnal megerősít; görgetés után 3 másodperc várakozás
+  is kiválasztja az elemet. A lista 64 valódi bejegyzésenként lapozható,
+  újraolvasható, és tartalmaz visszaváltást rádiómódra. SD-módban a rádiós
+  presetek helyett ez a fájlválasztó jelenik meg.
+- A helyi dekóderek formátumai: MP3, AAC/AACP, M4A (AAC), WAV, FLAC,
+  OGG/OGA (Vorbis/Opus), OPUS és VOR/VORBIS. A konkrét kódolás, mintavétel
+  és bitráta továbbra is a meglévő hangkönyvtár és az ESP32 korlátaihoz igazodik.
+- SD-logó jelenik meg a kijelzőn és a weben. Elérhető előadó/cím metaadat esetén
+  a meglévő, engedélyezett borítókeresés is működhet, internetkapcsolattal.
+  Találat hiányában az SD-logó marad. Metaadat nélkül a fájlnév látható.
+  A fájlba ágyazott borítók SD-ről történő kiolvasása ebben a változatban nincs bekötve.
+- A kártyát a készülék kikapcsolt állapotában helyezd be vagy cseréld; FAT32
+  javasolt. A firmware nem formázza a kártyát és nem ír a zenefájlokba.
+  Az SD-lejátszás nem igényel internetet; induláskor a készülék rádiómódban marad.
+
+Frissítéskor a firmware mellett az összes módosult `data/web/index_*.html`,
+`search_*.html`, `settings_*.html` és az új `data/web/sd.js` is szükséges.
+A meglévő `data/logos/sd_card.png` fájlnak szintén a készüléken kell lennie.
+Az SD-fájlok a kártyán maradnak, nem a LittleFS adatpartíciójára kerülnek.
+
+Ellenőrzés: `pio run`, `node tools/check_languages.cjs`, valamint Playwrighttal
+`node tools/check_sd_ui.cjs` (Edge, szimulált rádióválaszokkal).
+A fizikai SD-olvasást, a hangot és a borítóletöltést a panelen is ellenőrizni kell.
+
+### SD-javítások: dalszöveg és állapotüzenetek
+
+A `MP3Decoder has been destroyed/initialized` üzenetek a soros naplóban
+megmaradnak, de nem írják felül a kijelzett állapotot. Az `ed5bc0e97...`
+ELF-hez tartozó, `0x4206e116` című összeomlás az `Audio::calculateAudioTime`
+dalszöveg-időbélyeg olvasásánál történt: szövegsor létezett, időbélyeg nem.
+A javítás külön kezeli az időzítés nélküli USLT és az időzített SYLT adatot;
+csak teljes szöveg/időbélyeg-párokat fogad el, ellenőrzi a kerethatárokat,
+és az időszámításban is mindkét táblázat méretéhez igazodik. Az opcionális,
+hiányos vagy túl nagy dalszöveg átugorható a zene és az előadó/cím megtartásával.
+A `tools/check_id3_lyrics.cpp` C++20 fordításkori tesztjei teljes, csonkolt,
+UTF-8 és UTF-16 adatokat, hiányzó időbélyeget és eltérő táblaméreteket fednek le.
+A javított fájl lejátszását a fizikai panelen még ellenőrizni kell.
+
 
 ---
 
-## English summary
-
-# Moon Radio
+# Moon Radio – English
 
 Moon Radio is an ESP32-S3-based internet radio with a touchscreen and
 controls accessible via a web browser.
@@ -136,6 +200,8 @@ controls accessible via a web browser.
 ## Key features
 
 - Plays internet radio stations and local network M3U playlists.
+- Plays local music from the FREENOVE FNK0104S integrated SD_MMC card reader,
+  including folder and file browsing.
 - Saved station list, station search, editing and presets.
 - Station logos and album covers displayed based on available track data.
 - Stereo VU, spectrum or disabled bottom display bar.
@@ -178,11 +244,18 @@ slot, keeping March and later dates aligned in non-leap years as well.
 - ILI9488 display with FT6X36 capacitive touch.
 - ST7796 display with XPT2046 or FT6X36 touch.
 - Guition JC3248W535C module with built-in AXS15231B display and touch.
-- FREENOVE FNK0104S display with FT6X36 capacitive touch.
+- FREENOVE FNK0104S display with FT6X36 capacitive touch and supported
+  integrated SD_MMC reader.
 
 The touchscreen provides access to playback, the Wi-Fi view, volume, the
 clock/IP address, the weather view and visualisation mode. Using rotary encoders,
 station selection, volume and playback can also be controlled.
+
+The SD source can be selected on the device and on every localized web page.
+In SD mode, folders and playable files replace the station list. See
+**SD playback – FNK0104S** below for controls and supported formats.
+The SPI SD slot of the ILI9488_TS module did not respond during an isolated
+hardware probe and is therefore not considered supported on that panel.
 
 ## What does the radio display?
 
@@ -198,14 +271,15 @@ browser interface can be accessed via the IP address shown on the display.
 
 ## Related devices
 
-Moon Radio can be used with a station list editor, a wireless
-file manager and a plug-in for streaming music folders from a computer.
+Moon Radio can be used with a wireless file manager and a plug-in for
+streaming music folders from a computer.
 
 
 ## LittleFS File Manager Wi-Fi v0.6.0 connection
 
-The firmware is compatible with the
+The file listing, download and deletion endpoints can be used by the
 Wi-Fi Partition Manager included in the `WiFi_manager_v0.6.0` package.
+Use serial `uploadfs` for general filesystem uploads.
 In the programme, select the **WiFi / IP** connection, then enter the radio IP address
 shown on the display (this can be accessed later by tapping the ‘LVGL Radio’ label).
 No port or separate route needs to be specified.
@@ -216,15 +290,13 @@ Recommended additional partition files for Wi-Fi management:
 Operations available via Wi-Fi:
 
 - listing the entire LittleFS directory tree;
-- uploading and downloading files;
+- downloading files;
 - creating and deleting directories;
 - deleting files;
 - restarting the radio.
 
-This means that modifying individual files does not require a separate serial
-`uploadfs` command.
-However, if you wish to overwrite the entire local `data` folder in one go,
-`uploadfs` can still be used.
+Upload the local `data` folder with serial `uploadfs`.
+Web background and logo management use their own dedicated upload endpoints.
 When the Wi-Fi file manager connects, the radio enters safety maintenance mode:
 playback and LVGL updates are paused, so that the fonts and cache files
 currently in use can also be replaced. Once you have finished, use the Partition
@@ -232,12 +304,43 @@ Manager’s **Restart** command to return to normal radio mode.
 The file manager API is not password-protected on the local network, so only
 use it on a trusted network.
 
-Recommended add-on for managing station lists via Wi-Fi:
-[myRadio Stations Editor](https://github.com/gidano/myRadio-Stations-Editor).
-
 Add-on for streaming music folders from a PC over a network:
 [myRadio Music Server](https://github.com/gidano/myRadio-Music-Server).
 
 For web-based control from an Android device, with device backup:
 [YoRadio Controller](https://github.com/gidano/YoRadio-Controller)
 
+
+## SD playback – FNK0104S
+
+The integrated slot uses Freenove's native 4-bit SD_MMC wiring:
+CLK=38, CMD=40, D0=39, D1=41, D2=48, D3=47. It does not share the display SPI bus.
+Keep I2S on DIN=2, BCK=3, WS=14. Select **SD card** on any localized web control
+page, browse a folder on the home page and select a music file. Previous/next
+and automatic advance cycle through that folder by filename. **Radio** restores
+the selected station. Directory pages contain 64 entries; search filters loaded
+entries. MP3, AAC/AACP, M4A/AAC, WAV, FLAC, Vorbis and Opus use the existing
+decoders and their format limits. With artist/title tags and internet access,
+the existing album-cover lookup is used; otherwise the SD logo stays visible.
+Embedded local cover extraction is not implemented. FAT32 is recommended;
+insert/change cards with power off. SD playback works offline. Upload both the
+firmware and the changed web assets, including `sd.js`, and retain `sd_card.png`.
+Hardware playback and cover retrieval still require testing on the physical board.
+
+
+### SD fixes: lyrics and status messages
+
+The `MP3Decoder has been destroyed/initialized` messages remain available
+in the serial log but no longer overwrite the displayed status. The crash at
+`0x4206e116` in the `ed5bc0e97...` ELF occurred while
+`Audio::calculateAudioTime` was reading lyric timestamps: a text line
+existed without a matching timestamp.
+
+The fix handles untimed USLT and synchronized SYLT data separately, accepts
+only complete text/timestamp pairs, checks frame boundaries and limits time
+calculation to the available entries in both tables. Optional, incomplete or
+oversized lyrics can be skipped while preserving playback and artist/title
+metadata. The C++20 compile-time tests in `tools/check_id3_lyrics.cpp` cover
+complete and truncated data, UTF-8 and UTF-16 text, missing timestamps and
+mismatched table sizes. Playback of the corrected file still requires
+verification on the physical panel.
