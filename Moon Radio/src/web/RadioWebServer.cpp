@@ -158,7 +158,6 @@ void RadioWebServer::registerRoutes() {
   server_.on("/favicon.ico", HTTP_GET,
              [this]() { serveFile("/web/favicon.svg", "image/svg+xml"); });
   server_.on("/wifi", HTTP_GET, [this]() { serveWifiForm(); });
-  server_.on("/upload", HTTP_GET, [this]() { serveUploadForm(); });
   server_.on("/api/wifi", HTTP_POST, [this]() {
     const String ssid = argument("ssid");
     const String password = argument("password");
@@ -174,6 +173,16 @@ void RadioWebServer::registerRoutes() {
   });
 
   server_.on("/api/stations", HTTP_GET, [this]() { sendStations(); });
+  server_.on("/api/sd/list", HTTP_GET, [this]() { sendSdDirectory(); });
+  server_.on("/api/sd/play", HTTP_POST, [this]() {
+    const bool ok = radio_.playSdFile(argument("path"));
+    server_.send(ok ? 200 : 400, kJson, ok ? "{\"ok\":true}" : "{\"ok\":false}");
+  });
+  server_.on("/api/source", HTTP_POST, [this]() {
+    const String source = argument("source");
+    const bool ok = (source == "sd" || source == "radio") && radio_.setSdMode(source == "sd");
+    server_.send(ok ? 200 : 400, kJson, ok ? "{\"ok\":true}" : "{\"ok\":false}");
+  });
   server_.on("/api/status", HTTP_GET, [this]() { sendStatus(); });
   server_.on("/api/language", HTTP_GET, [this]() {
     server_.sendHeader("Cache-Control", "no-store");
@@ -567,8 +576,6 @@ void RadioWebServer::registerRoutes() {
     restartAt_ = millis() + 500;
   });
 
-  server_.on("/upload", HTTP_POST, [this]() { uploadFinished(); },
-             [this]() { uploadChunk(); });
   server_.on("/api/background/upload", HTTP_POST,
              [this]() { backgroundUploadFinished(); },
              [this]() { backgroundUploadChunk(); });
@@ -630,34 +637,6 @@ void RadioWebServer::serveWifiForm() {
   server_.send(200, "text/html; charset=utf-8", page);
 }
 
-void RadioWebServer::serveUploadForm() {
-  String page =
-      "<!doctype html><html lang='hu'><meta charset='utf-8'>"
-      "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-      "<title>Moon Radio fájlfeltöltés</title><style>"
-      "body{font-family:sans-serif;background:#080b12;color:#f1f5f9;"
-      "max-width:520px;margin:40px auto;padding:20px}"
-      "input,select,button{box-sizing:border-box;width:100%;padding:12px;"
-      "margin:8px 0;border-radius:8px;border:1px solid #334155}"
-      "button{background:#e92b63;color:white;font-weight:bold}"
-      "a{color:#7dd3fc}</style><h1>LittleFS fájlfeltöltés</h1>"
-      "<p>A Stations Editor a <code>/stations.txt</code> útvonalat "
-      "ugyanezen a végponton használja.</p>"
-      "<form method='post' action='/upload' enctype='multipart/form-data'>"
-      "<input name='path' value='/stations.txt' "
-      "placeholder='/web/index_hu.html' required>"
-      "<input type='file' name='file' required>"
-      "<button type='submit'>Feltöltés</button></form>"
-      "<p><a href='/'>Vissza a rádióhoz</a></p></html>";
-  page.replace("lang='hu'", String("lang='") + Language::code() + "'");
-  page.replace("Moon Radio fájlfeltöltés", Language::text("Moon Radio fájlfeltöltés"));
-  page.replace("LittleFS fájlfeltöltés", Language::text("LittleFS fájlfeltöltés"));
-  page.replace("A Stations Editor a <code>/stations.txt</code> útvonalat ugyanezen a végponton használja.", Language::text("A Stations Editor a <code>/stations.txt</code> útvonalat ugyanezen a végponton használja."));
-  page.replace("Feltöltés", Language::text("Feltöltés"));
-  page.replace("Vissza a rádióhoz", Language::text("Vissza a rádióhoz"));
-  server_.send(200, "text/html; charset=utf-8", page);
-}
-
 void RadioWebServer::sendStations() {
   String json;
   json.reserve(4096);
@@ -685,6 +664,7 @@ void RadioWebServer::sendStations() {
 void RadioWebServer::sendStatus() {
   const AudioSnapshot audio = radio_.audioSnapshot();
   String json = "{\"currentIndex\":" + String(radio_.currentIndex());
+  json += ",\"source\":\"" + String(radio_.sdMode() ? "sd" : "radio") + "\"";
   json += ",\"volume\":" + String(radio_.volume());
   json += ",\"paused\":" + String(audio.paused ? "true" : "false");
   json += ",\"stationName\":\"" + jsonEscape(audio.stationName) + "\"";
@@ -732,6 +712,37 @@ void RadioWebServer::sendStatus() {
           String(radio_.playlistActive() ? "true" : "false");
   json += ",\"trackIndex\":" + String(radio_.playlistIndex());
   json += ",\"trackCount\":" + String(radio_.playlistCount()) + "}";
+  server_.send(200, kJson, json);
+}
+
+void RadioWebServer::sendSdDirectory() {
+  if (radio_.fsMaintenance()) {
+    server_.send(409, kJson, "{\"error\":\"Maintenance\"}");
+    return;
+  }
+  String path;
+  const long offset = argument("offset").toInt();
+  if (offset < 0 || offset > 100000 || !SdLibrary::normalize(argument("path"), path)) {
+    server_.send(400, kJson, "{\"error\":\"Invalid path or offset\"}");
+    return;
+  }
+  std::vector<SdLibrary::Entry> entries;
+  bool more = false;
+  if (!radio_.sdLibrary().list(path, offset, entries, more)) {
+    server_.send(503, kJson, "{\"error\":\"SD unavailable or directory unreadable\"}");
+    return;
+  }
+  String json = "{\"path\":\"" + jsonEscape(path) + "\",\"entries\":[";
+  for (size_t i = 0; i < entries.size(); ++i) {
+    if (i) json += ',';
+    const auto& entry = entries[i];
+    json += "{\"name\":\"" + jsonEscape(entry.name) + "\",\"path\":\"" +
+            jsonEscape(entry.path) + "\",\"directory\":" +
+            String(entry.directory ? "true" : "false") + "}";
+  }
+  json += "],\"more\":" + String(more ? "true" : "false") +
+          ",\"nextOffset\":" + String(offset + entries.size()) + "}";
+  server_.sendHeader("Cache-Control", "no-store");
   server_.send(200, kJson, json);
 }
 
@@ -1242,56 +1253,6 @@ void RadioWebServer::moveStation() {
                "{\"ok\":true}");
 }
 
-void RadioWebServer::uploadFinished() {
-  if (uploadFile_) uploadFile_.close();
-  if (stationsUploaded_ && !uploadFailed_) {
-    radio_.reloadStations();
-  }
-  const bool ok = !uploadFailed_ && !uploadPath_.isEmpty();
-  server_.send(ok ? 200 : 500, kJson,
-               ok ? "{\"ok\":true}"
-                  : "{\"ok\":false,\"error\":\"write failed\"}");
-  uploadPath_ = "";
-  uploadFailed_ = false;
-  stationsUploaded_ = false;
-}
-
-void RadioWebServer::uploadChunk() {
-  HTTPUpload& upload = server_.upload();
-  if (upload.status == UPLOAD_FILE_START) {
-    uploadFailed_ = false;
-    stationsUploaded_ = false;
-    String requestedPath = server_.arg("path");
-    if (requestedPath.isEmpty()) requestedPath = upload.filename;
-    if (!normalizeFsPath(requestedPath, uploadPath_) ||
-        !allowedUploadPath(uploadPath_)) {
-      uploadPath_ = "";
-      uploadFailed_ = true;
-      return;
-    }
-    if (!ensureParentDirectories(uploadPath_)) {
-      uploadFailed_ = true;
-      return;
-    }
-    if (LittleFS.exists(uploadPath_)) LittleFS.remove(uploadPath_);
-    uploadFile_ = LittleFS.open(uploadPath_, FILE_WRITE);
-    uploadFailed_ = !uploadFile_;
-    stationsUploaded_ = uploadPath_ == "/stations.txt";
-  } else if (upload.status == UPLOAD_FILE_WRITE) {
-    if (!uploadFile_ ||
-        uploadFile_.write(upload.buf, upload.currentSize) !=
-            upload.currentSize) {
-      uploadFailed_ = true;
-    }
-  } else if (upload.status == UPLOAD_FILE_END) {
-    if (uploadFile_) uploadFile_.close();
-  } else if (upload.status == UPLOAD_FILE_ABORTED) {
-    if (uploadFile_) uploadFile_.close();
-    if (!uploadPath_.isEmpty()) LittleFS.remove(uploadPath_);
-    uploadFailed_ = true;
-  }
-}
-
 void RadioWebServer::backgroundUploadFinished() {
   if (backgroundUploadFile_) backgroundUploadFile_.close();
   const bool ok = !backgroundUploadFailed_ && !backgroundUploadPath_.isEmpty();
@@ -1646,11 +1607,6 @@ String RadioWebServer::contentTypeFor(const String& path) {
   if (path.endsWith(".webmanifest")) return "application/manifest+json";
   if (path.endsWith(".json")) return kJson;
   return "application/octet-stream";
-}
-
-bool RadioWebServer::allowedUploadPath(const String& path) {
-  String normalized;
-  return normalizeFsPath(path, normalized) && normalized == path;
 }
 
 bool RadioWebServer::normalizeFsPath(String input, String& output,

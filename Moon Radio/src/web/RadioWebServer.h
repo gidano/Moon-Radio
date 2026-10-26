@@ -18,8 +18,8 @@ class RadioWebServer {
   void serveFile(const String& path, const String& contentType);
   void serveHome();
   void serveWifiForm();
-  void serveUploadForm();
   void sendStations();
+  void sendSdDirectory();
   void sendStatus();
   void sendBuffer();
   void sendCurrentLogo();
@@ -39,8 +39,6 @@ class RadioWebServer {
   void updateStation();
   void deleteStation();
   void moveStation();
-  void uploadFinished();
-  void uploadChunk();
   void backgroundUploadFinished();
   void backgroundUploadChunk();
   void logoUploadFinished();
@@ -56,7 +54,6 @@ class RadioWebServer {
   static int jsonIntField(const String& body, const String& name,
                           int fallback);
   static String contentTypeFor(const String& path);
-  static bool allowedUploadPath(const String& path);
   static bool normalizeFsPath(String input, String& output,
                               bool allowRoot = false);
   static bool ensureParentDirectories(const String& path);
@@ -65,11 +62,9 @@ class RadioWebServer {
   RadioController& radio_;
   DNSServer dns_;
   WebServer server_{80};
-  File uploadFile_;
   File backgroundUploadFile_;
   File logoUploadFile_;
   File artworkUploadFile_;
-  String uploadPath_;
   String backgroundUploadPath_;
   String backgroundUploadError_;
   String logoUploadPath_;
@@ -81,8 +76,6 @@ class RadioWebServer {
   bool backgroundUploadFailed_{false};
   bool logoUploadFailed_{false};
   bool artworkUploadFailed_{false};
-  bool uploadFailed_{false};
-  bool stationsUploaded_{false};
   bool backgroundUploadFinalizePending_{false};
   bool restartPending_{false};
   bool dnsRunning_{false};
