@@ -29,6 +29,10 @@ struct NowPlayingActions {
   void (*wifiDetailsVisibleChanged)(void*, bool){nullptr};
   void (*volumeGraphicVisibleChanged)(void*, bool){nullptr};
   void (*diagnosticsVisibleChanged)(void*, bool){nullptr};
+  void (*prepareSelector)(void*){nullptr};
+  bool (*sdMode)(void*){nullptr};
+  void (*toggleSource)(void*){nullptr};
+  String (*selectorPath)(void*){nullptr};
 };
 
 class NowPlayingScreen {
@@ -68,6 +72,7 @@ class NowPlayingScreen {
   static void logoPanelEvent(lv_event_t* event);
   static void stationEvent(lv_event_t* event);
   static void wifiEvent(lv_event_t* event);
+  static void sourceEvent(lv_event_t* event);
   static void headerVolumeEvent(lv_event_t* event);
   static void clockAreaEvent(lv_event_t* event);
   static void weatherEvent(lv_event_t* event);
@@ -78,6 +83,7 @@ class NowPlayingScreen {
                               NowPlayingScreen* screen);
   void updateWifiIndicator(const String& wifiText);
   void updateWifiHeader(const String& wifiText);
+  void updateSourceButton();
   void updateHeaderVolumeDisplay();
   void updateClockIpVisibility(uint32_t now);
   void updateWeather(const WeatherSnapshot& weather);
@@ -102,6 +108,8 @@ class NowPlayingScreen {
   lv_obj_t* wifiTouchArea_{nullptr};
   lv_obj_t* appLabel_{nullptr};
   lv_obj_t* appTouchArea_{nullptr};
+  lv_obj_t* sourceButton_{nullptr};
+  lv_obj_t* sourceButtonIcon_{nullptr};
   lv_obj_t* bufferLabel_{nullptr};
   lv_obj_t* clockLabel_{nullptr};
   lv_obj_t* ipLabel_{nullptr};
@@ -150,6 +158,8 @@ class NowPlayingScreen {
   uint8_t* moonPixels_{nullptr};
   lv_image_dsc_t moonDescriptor_{};
   bool diagnosticsVisible_{false};
+  bool sourceButtonInitialized_{false};
+  bool sourceButtonSdMode_{false};
   bool sliderSyncing_{false};
   bool wifiDetailsVisible_{false};
   bool bufferBarVisible_{true};

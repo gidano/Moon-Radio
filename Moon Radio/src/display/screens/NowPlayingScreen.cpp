@@ -62,9 +62,9 @@ void updateHeaderVolumeLabel(lv_obj_t* label, const char* text) {
   if (!label || !text) return;
   const char* current = lv_label_get_text(label);
   const bool textChanged = !current || strcmp(current, text) != 0;
+#if DISPLAY_PROFILE_AXS15231B
   const bool needsPosition = lv_obj_get_x(label) != kHeaderVolumeLeft ||
                              lv_obj_get_y(label) != kHeaderVolumeTop;
-#if DISPLAY_PROFILE_AXS15231B
   if (!textChanged && !needsPosition) return;
 #endif
   if (textChanged) lv_label_set_text(label, text);
@@ -254,6 +254,29 @@ void NowPlayingScreen::create(FontManager& fonts,
   lv_obj_add_flag(appTouchArea_, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_event_cb(appTouchArea_, clockAreaEvent, LV_EVENT_CLICKED, this);
   lv_obj_move_foreground(appTouchArea_);
+
+  // Compact source switch in the unused gap between the centered title and
+  // the volume control. The icon shows the destination rather than the
+  // current source: SD while listening to radio, audio while using SD.
+#if TOUCH_ENABLED
+  sourceButton_ = lv_button_create(top);
+  lv_obj_set_pos(sourceButton_, 332, 4);
+  lv_obj_set_size(sourceButton_, 40, 28);
+  lv_obj_set_style_bg_color(sourceButton_, lv_color_hex(0x0F172A), 0);
+  lv_obj_set_style_bg_opa(sourceButton_, LV_OPA_70, 0);
+  lv_obj_set_style_border_width(sourceButton_, 1, 0);
+  lv_obj_set_style_radius(sourceButton_, 7, 0);
+  lv_obj_set_style_pad_all(sourceButton_, 0, 0);
+  lv_obj_clear_flag(sourceButton_, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_set_ext_click_area(sourceButton_, 4);
+  lv_obj_add_event_cb(sourceButton_, sourceEvent, LV_EVENT_CLICKED, this);
+
+  sourceButtonIcon_ = lv_label_create(sourceButton_);
+  lv_obj_set_style_text_font(sourceButtonIcon_, fonts.symbol(), 0);
+  lv_obj_center(sourceButtonIcon_);
+  sourceButtonInitialized_ = false;
+  updateSourceButton();
+#endif
 
   bufferLabel_ = lv_label_create(screen);
   lv_label_set_text(bufferLabel_, "");
@@ -838,6 +861,7 @@ void NowPlayingScreen::update(const AudioSnapshot& audio,
   updateClockIpVisibility(millis());
   updateBufferBar(audio);
   updateWeather(weather);
+  updateSourceButton();
   updateLogo(logoName);
   updateDiagnostics(diagnostics, bufferText);
 }
@@ -1004,6 +1028,20 @@ void NowPlayingScreen::updateWifiHeader(const String& wifiText) {
       lv_obj_remove_flag(bar, LV_OBJ_FLAG_HIDDEN);
   }
 #endif
+}
+
+void NowPlayingScreen::updateSourceButton() {
+  if (!sourceButton_ || !sourceButtonIcon_) return;
+  const bool sd = actions_.sdMode && actions_.sdMode(actions_.context);
+  if (sourceButtonInitialized_ && sd == sourceButtonSdMode_) return;
+
+  sourceButtonInitialized_ = true;
+  sourceButtonSdMode_ = sd;
+  const uint32_t color = sd ? 0x7DD3FC : 0x86EFAC;
+  lv_label_set_text(sourceButtonIcon_, sd ? LV_SYMBOL_AUDIO : LV_SYMBOL_SD_CARD);
+  lv_obj_set_style_text_color(sourceButtonIcon_, lv_color_hex(color), 0);
+  lv_obj_set_style_border_color(sourceButton_, lv_color_hex(color), 0);
+  lv_obj_set_style_border_opa(sourceButton_, LV_OPA_70, 0);
 }
 
 void NowPlayingScreen::showVolumePopup() {
@@ -1793,6 +1831,13 @@ void NowPlayingScreen::wifiEvent(lv_event_t* event) {
     screen->actions_.wifiDetailsVisibleChanged(screen->actions_.context,
                                                screen->wifiDetailsVisible_);
   }
+}
+
+void NowPlayingScreen::sourceEvent(lv_event_t* event) {
+  auto* screen =
+      static_cast<NowPlayingScreen*>(lv_event_get_user_data(event));
+  if (screen && screen->actions_.toggleSource)
+    screen->actions_.toggleSource(screen->actions_.context);
 }
 
 void NowPlayingScreen::stationEvent(lv_event_t* event) {
