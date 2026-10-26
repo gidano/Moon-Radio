@@ -12,14 +12,17 @@ constexpr Code kDefault = Code::LANGUAGE;
 Code active = kDefault;
 const char* const codes[] = {"hu", "en", "de", "pl"};
 const char* const messages[][4] = {
+  {"[..] Szülőkönyvtár", "[..] Parent folder", "[..] Übergeordneter Ordner", "[..] Folder nadrzędny"},
+  {"<< Előző oldal", "<< Previous page", "<< Vorherige Seite", "<< Poprzednia strona"},
+  {">> Következő oldal", ">> Next page", ">> Nächste Seite", ">> Następna strona"},
+  {"SD olvasási hiba - újra", "SD read error - retry", "SD-Lesefehler - erneut", "Błąd odczytu SD - ponów"},
+  {"SD újraolvasása", "Refresh SD", "SD aktualisieren", "Odśwież SD"},
+  {"Nincs zenei fájl", "No music files", "Keine Musikdateien", "Brak plików muzycznych"},
+  {"SD: pipa vagy 3 mp várakozás", "SD: confirm or wait 3 s", "SD: bestätigen oder 3 s warten", "SD: zatwierdź lub poczekaj 3 s"},
   {"Wi-Fi hálózat beállítása", "Wi-Fi network setup", "WLAN einrichten", "Konfiguracja sieci Wi-Fi"},
   {"Hálózat neve", "Network name", "Netzwerkname", "Nazwa sieci"},
   {"Jelszó", "Password", "Passwort", "Hasło"},
   {"Mentés és újraindítás", "Save and restart", "Speichern und neu starten", "Zapisz i uruchom ponownie"},
-  {"Moon Radio fájlfeltöltés", "Moon Radio file upload", "Moon Radio Datei-Upload", "Przesyłanie plików Moon Radio"},
-  {"LittleFS fájlfeltöltés", "LittleFS file upload", "LittleFS Datei-Upload", "Przesyłanie plików LittleFS"},
-  {"A Stations Editor a <code>/stations.txt</code> útvonalat ugyanezen a végponton használja.", "Stations Editor uses <code>/stations.txt</code> at this endpoint.", "Stations Editor verwendet <code>/stations.txt</code> an diesem Endpunkt.", "Stations Editor używa <code>/stations.txt</code> w tym punkcie dostępu."},
-  {"Feltöltés", "Upload", "Hochladen", "Prześlij"},
   {"Vissza a rádióhoz", "Back to radio", "Zurück zum Radio", "Powrót do radia"},
   {"A Wi-Fi beállítás nem menthető.", "Cannot save Wi-Fi settings.", "WLAN-Einstellungen nicht speicherbar.", "Nie można zapisać ustawień Wi-Fi."},
   {"Wi-Fi elmentve. Az eszköz újraindul.", "Wi-Fi saved. Restarting device.", "WLAN gespeichert. Gerät startet neu.", "Zapisano Wi-Fi. Urządzenie uruchomi się ponownie."},
