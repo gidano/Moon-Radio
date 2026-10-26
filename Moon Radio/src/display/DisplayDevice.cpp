@@ -2,6 +2,14 @@
 
 #include "options.h"
 
+#if !DISPLAY_PROFILE_AXS15231B
+#if defined(SDC_CS) && defined(SD_SPI_HOST) && SD_SPI_HOST == HSPI
+constexpr auto kPanelSpiHost = SPI3_HOST;
+#else
+constexpr auto kPanelSpiHost = SPI2_HOST;
+#endif
+#endif
+
 DisplayDevice::DisplayDevice() {
   {
     auto config = bus_.config();
@@ -24,7 +32,7 @@ DisplayDevice::DisplayDevice() {
     config.pin_io2 = TFT_D2;
     config.pin_io3 = TFT_D3;
 #else
-    config.spi_host = SPI2_HOST;
+    config.spi_host = kPanelSpiHost;
     config.spi_mode = 0;
     config.freq_write = 40000000;
     config.freq_read = 16000000;
@@ -119,7 +127,7 @@ DisplayDevice::DisplayDevice() {
     config.pin_int = -1;
     config.bus_shared = true;
     config.offset_rotation = 0;
-    config.spi_host = SPI2_HOST;
+    config.spi_host = kPanelSpiHost;
     config.freq = 1000000;
     config.pin_sclk = TFT_SCK;
     config.pin_mosi = TFT_MOSI;
