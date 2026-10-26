@@ -180,7 +180,14 @@ bool RadioController::begin() {
       .wifiDetailsVisibleChanged = wifiDetailsVisibleChangedAction,
       .volumeGraphicVisibleChanged = volumeGraphicVisibleChangedAction,
       .diagnosticsVisibleChanged = diagnosticsVisibleChangedAction,
+      .prepareSelector = prepareSelectorAction,
+      .sdMode = sdModeAction,
+      .selectorPath = selectorPathAction,
   };
+#ifdef SDC_CS
+  pinMode(SDC_CS, OUTPUT);
+  digitalWrite(SDC_CS, HIGH);
+#endif
   display_.begin(actions);
   const InputActions inputActions{
       .context = this,
@@ -366,7 +373,7 @@ void RadioController::loop() {
       while (audio_.takeArtworkEvent(artworkEvent)) {
         if (artworkEvent.kind == AudioEngine::ArtworkEventKind::IcyLogo) {
           logoManager_.setIcyLogo(artworkEvent.text, currentPlayUrl_);
-        } else if (!playlist_.active()) {
+        } else if (!sdMode_ && !playlist_.active()) {
           std::vector<uint32_t> segments;
           segments.reserve(artworkEvent.segmentValues);
           for (uint8_t index = 0; index < artworkEvent.segmentValues; ++index)
@@ -380,7 +387,7 @@ void RadioController::loop() {
                         snapshot.bitrateKbps, snapshot.bufferPercent);
     }
 
-    if (!logoManager_.busy() && now - lastMetadataAt_ >= kMetadataServiceMs) {
+    if (!sdMode_ && !logoManager_.busy() && now - lastMetadataAt_ >= kMetadataServiceMs) {
       lastMetadataAt_ = now;
       metadata_.loop(wifiConnected, running, bufferFilled);
     }
@@ -397,7 +404,7 @@ void RadioController::loop() {
   }
   if (wifiConnected && !wifiWasConnected_ && !fsMaintenance_) {
     applyTimezone();
-    if (stationStore_.count() > 0) connectCurrentStation();
+    if (!sdMode_ && stationStore_.count() > 0) connectCurrentStation();
   }
   wifiWasConnected_ = wifiConnected;
   if (web_ && now - lastWebLoopAt_ >= kWebServiceMs) {
@@ -408,7 +415,9 @@ void RadioController::loop() {
   processClockTts(now);
 
   if (!clockTtsActive_ && audio_.consumeEndOfFile()) {
-    if (playlist_.active()) {
+    if (sdMode_) {
+      stepTrack(1);
+    } else if (playlist_.active()) {
       stepTrack(1);
     } else if (wifiConnected && stationStore_.count() > 0) {
       Serial.println("[radio] Elo stream vege, ujracsatlakozas");
@@ -416,7 +425,7 @@ void RadioController::loop() {
     }
   }
 
-  if (connectRetryPending_ && wifiConnected &&
+  if (!sdMode_ && connectRetryPending_ && wifiConnected &&
       static_cast<int32_t>(now - nextConnectRetryAt_) >= 0) {
     connectRetryPending_ = false;
     Serial.println("[radio] M3U kapcsolat ujraprobalasa");
@@ -449,16 +458,16 @@ WifiManager& RadioController::wifi() { return wifiManager_; }
 size_t RadioController::currentIndex() const { return currentIndex_; }
 
 const Station* RadioController::currentStation() const {
-  return stationStore_.get(currentIndex_);
+  return sdMode_ ? nullptr : stationStore_.get(currentIndex_);
 }
 
 AudioSnapshot RadioController::audioSnapshot() {
   const Station* station = currentStation();
   AudioSnapshot snapshot =
-      audio_.snapshot(station ? station->name : String(Language::text("Nincs állomás")));
+      audio_.snapshot(sdMode_ ? String("SD") : station ? station->name : String(Language::text("Nincs állomás")));
   // A MyOnlineRadio által adott aktuális cím pontosabb, mint az érintett
   // adók gyakran csak szlogent vagy műsornevet küldő stream-metaadata.
-  const String externalTitle = metadata_.title();
+  const String externalTitle = sdMode_ ? String() : metadata_.title();
   if (!externalTitle.isEmpty()) {
     snapshot.streamTitle = externalTitle;
   } else if (snapshot.streamTitle.isEmpty() && !playlistTitle_.isEmpty()) {
@@ -481,6 +490,9 @@ bool RadioController::selectStation(size_t index) {
   const Station* station = stationStore_.get(index);
   if (!station) return false;
   resetClockTtsPlayback(true);
+  sdMode_ = false;
+  sdSelectorReady_ = false;
+  display_.refreshStationSelector();
   currentIndex_ = index;
 
   Preferences preferences;
@@ -503,11 +515,13 @@ bool RadioController::selectStation(size_t index) {
 }
 
 bool RadioController::previousStation() {
+  if (sdMode_) return stepTrack(-1);
   const size_t count = stationStore_.count();
   return count > 0 && selectStation((currentIndex_ + count - 1) % count);
 }
 
 bool RadioController::nextStation() {
+  if (sdMode_) return stepTrack(1);
   const size_t count = stationStore_.count();
   return count > 0 && selectStation((currentIndex_ + 1) % count);
 }
@@ -521,7 +535,7 @@ bool RadioController::togglePause() {
   // pauseResume() cannot restart an already closed stream. In STOP/error
   // state, Play must establish the current station again.
   if (!audio_.running()) {
-    if (!wifiManager_.connected()) return false;
+    if (!sdMode_ && !wifiManager_.connected()) return false;
     return connectCurrentStation();
   }
   return audio_.togglePause();
@@ -536,7 +550,7 @@ void RadioController::resetStreamProgressWatchdog(uint32_t now) {
 
 void RadioController::recoverStalledStream(uint32_t now, bool wifiConnected,
                                            size_t bufferFilled) {
-  if (!wifiConnected || audio_.paused() || clockTtsActive_ ||
+  if (sdMode_ || !wifiConnected || audio_.paused() || clockTtsActive_ ||
       clockTtsFadingDown_ || clockTtsFadingUp_ || connectRetryPending_ ||
       currentPlayUrl_.isEmpty() || stationStore_.count() == 0) {
     return;
@@ -833,7 +847,7 @@ bool RadioController::forceClockTts(const String& text,
   if (speech.isEmpty()) return false;
   const String lang =
       language.isEmpty() ? clockTts_.language : normalizeClockTtsLanguage(language);
-  const bool resumeAfter = audio_.running();
+  const bool resumeAfter = audio_.running() && !audio_.paused();
   if (resumeAfter) {
     clockTtsPendingText_ = speech;
     clockTtsPendingLanguage_ = lang;
@@ -853,11 +867,12 @@ void RadioController::beginBackgroundUploadMode() {
   const AudioSnapshot snapshot = audio_.snapshot(
       currentStation() ? currentStation()->name : String(Language::text("Nincs állomás")));
   backgroundUploadResumePlayback_ =
-      wifiManager_.connected() &&
+      (sdMode_ || wifiManager_.connected()) &&
       (snapshot.running || snapshot.paused || !currentPlayUrl_.isEmpty());
   backgroundUploadMode_ = true;
   connectRetryPending_ = false;
   audio_.setVisualizationEnabled(false);
+  if (sdMode_) sdResumeSeconds_ = audio_.audioCurrentTime();
   audio_.stop();
   refreshDisplay(true);
 }
@@ -867,7 +882,7 @@ void RadioController::endBackgroundUploadMode() {
   backgroundUploadMode_ = false;
   const bool resumePlayback = backgroundUploadResumePlayback_;
   backgroundUploadResumePlayback_ = false;
-  if (resumePlayback && wifiManager_.connected() && stationStore_.count() > 0) {
+  if (resumePlayback && (sdMode_ || (wifiManager_.connected() && stationStore_.count() > 0))) {
     connectCurrentStation();
   }
   refreshDisplay(true);
@@ -888,7 +903,7 @@ void RadioController::applyTimezone() {
 bool RadioController::reloadStations() {
   const bool ok = stationStore_.reload();
   if (currentIndex_ >= stationStore_.count()) currentIndex_ = 0;
-  if (ok && wifiManager_.connected() && !fsMaintenance_)
+  if (ok && !sdMode_ && wifiManager_.connected() && !fsMaintenance_)
     connectCurrentStation();
   refreshDisplay(true);
   return ok;
@@ -945,13 +960,18 @@ void RadioController::previousAction(void* context) {
 }
 
 void RadioController::toggleAction(void* context) {
-  static_cast<RadioController*>(context)->togglePause();
+  auto* radio = static_cast<RadioController*>(context);
+  if (radio->sdMode_ && radio->display_.stationSelectorActive()) {
+    radio->display_.confirmStationSelector();
+    return;
+  }
+  radio->togglePause();
 }
 
 void RadioController::nextAction(void* context) {
   RadioController* radio = static_cast<RadioController*>(context);
   if (radio->display_.stationSelectorActive()) {
-    radio->display_.moveStationSelector(-1);
+    radio->display_.moveStationSelector(1);
     return;
   }
   radio->nextStation();
@@ -1000,31 +1020,107 @@ void RadioController::setVolumeAction(void* context, uint8_t value) {
 }
 
 size_t RadioController::stationCountAction(void* context) {
-  return static_cast<RadioController*>(context)->stations().count();
+  auto* radio = static_cast<RadioController*>(context);
+  return radio->sdMode_ ? radio->sdSelectorItems_.size() : radio->stations().count();
 }
 
 String RadioController::stationNameAction(void* context, size_t index) {
+  auto* radio = static_cast<RadioController*>(context);
+  if (radio->sdMode_)
+    return index < radio->sdSelectorItems_.size() ? radio->sdSelectorItems_[index].name : String();
   const Station* station =
       static_cast<RadioController*>(context)->stations().get(index);
   return station ? station->name : String();
 }
 
 String RadioController::stationUrlAction(void* context, size_t index) {
+  auto* radio = static_cast<RadioController*>(context);
+  if (radio->sdMode_) return String();
   const Station* station =
       static_cast<RadioController*>(context)->stations().get(index);
   return station ? station->url : String();
 }
 
 size_t RadioController::currentStationAction(void* context) {
-  return static_cast<RadioController*>(context)->currentIndex();
+  auto* radio = static_cast<RadioController*>(context);
+  if (radio->sdMode_) {
+    for (size_t i = 0; i < radio->sdSelectorItems_.size(); ++i)
+      if (radio->sdSelectorItems_[i].path == radio->sdPath_) return i;
+    return 0;
+  }
+  return radio->currentIndex();
 }
 
 bool RadioController::selectStationAction(void* context, size_t index) {
-  return static_cast<RadioController*>(context)->selectStation(index);
+  auto* radio = static_cast<RadioController*>(context);
+  return radio->sdMode_ ? radio->selectSdItem(index) : radio->selectStation(index);
+}
+
+void RadioController::prepareSelectorAction(void* context) {
+  auto* radio = static_cast<RadioController*>(context);
+  if (radio->sdMode_ && !radio->sdSelectorReady_)
+    radio->loadSdSelector(radio->sdSelectorDirectory_, radio->sdSelectorOffset_);
+}
+
+bool RadioController::sdModeAction(void* context) {
+  return static_cast<RadioController*>(context)->sdMode_;
+}
+
+String RadioController::selectorPathAction(void* context) {
+  return static_cast<RadioController*>(context)->sdSelectorDirectory_;
+}
+
+void RadioController::loadSdSelector(const String& path, size_t offset) {
+  // Copy first: callers may pass our own directory string.
+  const String directory = path;
+  std::vector<SdLibrary::Entry> entries;
+  bool more = false;
+  const bool ok = sdLibrary_.list(directory, offset, entries, more);
+  sdSelectorDirectory_ = directory;
+  sdSelectorOffset_ = offset;
+  sdSelectorItems_.clear();
+  sdSelectorItems_.push_back({Language::text("Vissza a rádióhoz"), ":radio", false});
+  sdSelectorItems_.push_back({Language::text("SD újraolvasása"), ":retry", false});
+  if (directory != "/") {
+    String parent = directory.substring(0, directory.lastIndexOf('/'));
+    if (parent.isEmpty()) parent = "/";
+    sdSelectorItems_.push_back({Language::text("[..] Szülőkönyvtár"), parent, true});
+  }
+  if (offset) sdSelectorItems_.push_back({Language::text("<< Előző oldal"), ":previous", false});
+  if (!ok) {
+    sdSelectorItems_.push_back({Language::text("SD olvasási hiba - újra"), ":retry", false});
+  } else {
+    std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
+      if (a.directory != b.directory) return a.directory;
+      return a.name < b.name;
+    });
+    for (auto& entry : entries) {
+      if (entry.directory) entry.name = "[+] " + entry.name;
+      sdSelectorItems_.push_back(std::move(entry));
+    }
+    if (entries.empty()) sdSelectorItems_.push_back({Language::text("Nincs zenei fájl"), ":retry", false});
+    if (more) sdSelectorItems_.push_back({Language::text(">> Következő oldal"), ":more", false});
+  }
+  sdSelectorReady_ = true;
+}
+
+bool RadioController::selectSdItem(size_t index) {
+  if (index >= sdSelectorItems_.size()) return false;
+  const auto item = sdSelectorItems_[index];
+  if (item.path == ":radio") return setSdMode(false);
+  if (item.directory) loadSdSelector(item.path);
+  else if (item.path == ":more") loadSdSelector(sdSelectorDirectory_, sdSelectorOffset_ + 64);
+  else if (item.path == ":previous") loadSdSelector(sdSelectorDirectory_, sdSelectorOffset_ >= 64 ? sdSelectorOffset_ - 64 : 0);
+  else if (item.path == ":retry") loadSdSelector(sdSelectorDirectory_, sdSelectorOffset_);
+  else return playSdFile(item.path);
+  display_.openStationSelector();
+  return true;
 }
 
 void RadioController::openPresetsAction(void* context) {
-  static_cast<RadioController*>(context)->display_.showPresets();
+  auto* radio = static_cast<RadioController*>(context);
+  if (radio->sdMode_) radio->display_.openStationSelector();
+  else radio->display_.showPresets();
 }
 
 void RadioController::cycleWeatherModeAction(void* context) {
@@ -1229,6 +1325,7 @@ bool RadioController::beginClockTtsAnnouncement(const String& text,
                                                 const String& language,
                                                 bool resumeAfter) {
   clockTtsSavedStation_ = currentIndex_;
+  if (sdMode_) sdResumeSeconds_ = audio_.audioCurrentTime();
   if (audio_.running()) {
     audio_.stop();
     delay(150);
@@ -1236,7 +1333,7 @@ bool RadioController::beginClockTtsAnnouncement(const String& text,
   const bool ok = audio_.speak(text, language);
   if (!ok) {
     resetClockTtsPlayback(true);
-    if (resumeAfter && wifiManager_.connected() &&
+    if (resumeAfter && (sdMode_ || wifiManager_.connected()) &&
         currentIndex_ == clockTtsSavedStation_) {
       connectCurrentStation();
     }
@@ -1256,7 +1353,77 @@ bool RadioController::beginClockTtsAnnouncement(const String& text,
   return true;
 }
 
+bool RadioController::setSdMode(bool enabled) {
+  if (fsMaintenance_ || backgroundUploadMode_) {
+    Serial.printf("[sd] source change blocked: maintenance=%u backgroundUpload=%u\n",
+                  fsMaintenance_ ? 1U : 0U, backgroundUploadMode_ ? 1U : 0U);
+    return false;
+  }
+  if (enabled == sdMode_) return true;
+  if (enabled) {
+    if (!sdLibrary_.mount()) return false;
+    resetClockTtsPlayback(true);
+    audio_.stop();
+    playlist_.reset();
+    metadata_.selectStation(nullptr);
+    connectRetryPending_ = false;
+    currentPlayUrl_ = "";
+    playlistTitle_ = "";
+    sdMode_ = true;
+    sdSelectorReady_ = false;
+    display_.refreshStationSelector();
+    logoManager_.selectStation("sd_card", "", "", "SD");
+    refreshDisplay(true);
+    return true;
+  }
+  resetClockTtsPlayback(true);
+  audio_.stop();
+  sdMode_ = false;
+  sdSelectorReady_ = false;
+  display_.refreshStationSelector();
+  currentPlayUrl_ = "";
+  playlistTitle_ = "";
+  const Station* station = currentStation();
+  logoManager_.selectStation(station ? station->logoName : String("nologo"), "");
+  connectCurrentStation();
+  refreshDisplay(true);
+  // Connection errors are reported in status; the source has been selected.
+  return true;
+}
+
+bool RadioController::playSdFile(const String& path, int32_t seconds) {
+  return startSdFile(path, seconds, true);
+}
+
+bool RadioController::startSdFile(const String& path, int32_t seconds, bool userSelection) {
+  String normalized;
+  if (fsMaintenance_ || backgroundUploadMode_ ||
+      !SdLibrary::normalize(path, normalized) || !sdLibrary_.playable(normalized)) return false;
+  if (userSelection) resetClockTtsPlayback(true);
+  sdMode_ = true;
+  sdPath_ = normalized;
+  const String folder = normalized.substring(0, normalized.lastIndexOf('/'));
+  const String directory = folder.isEmpty() ? String("/") : folder;
+  if (directory != sdSelectorDirectory_) {
+    sdSelectorDirectory_ = directory;
+    sdSelectorOffset_ = 0;
+    sdSelectorReady_ = false;
+  }
+  display_.refreshStationSelector();
+  sdResumeSeconds_ = -1;
+  currentPlayUrl_ = normalized;
+  playlistTitle_ = normalized.substring(normalized.lastIndexOf('/') + 1);
+  playlist_.reset();
+  metadata_.selectStation(nullptr);
+  connectRetryPending_ = false;
+  logoManager_.selectStation("sd_card", "", "", "SD");
+  const bool ok = audio_.connectFile(sdLibrary_.filesystem(), normalized, seconds);
+  refreshDisplay(true);
+  return ok;
+}
+
 bool RadioController::connectCurrentStation() {
+  if (sdMode_) return !sdPath_.isEmpty() && startSdFile(sdPath_, sdResumeSeconds_, false);
   const Station* station = currentStation();
   if (!station || !wifiManager_.connected()) return false;
   metadata_.selectStation(station);
@@ -1286,6 +1453,10 @@ bool RadioController::connectCurrentStation() {
 }
 
 bool RadioController::stepTrack(int delta) {
+  if (sdMode_) {
+    const String next = sdLibrary_.adjacent(sdPath_.isEmpty() ? String("/") : sdPath_, delta);
+    return !next.isEmpty() && playSdFile(next);
+  }
   String resolvedUrl;
   String title;
   if (!playlist_.step(delta, resolvedUrl, title)) return false;

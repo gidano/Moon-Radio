@@ -5,6 +5,7 @@
 
 #include "../audio/AudioEngine.h"
 #include "../audio/PlaylistService.h"
+#include "../audio/SdLibrary.h"
 #include "../artwork/LogoManager.h"
 #include "../display/DisplayManager.h"
 #include "../diagnostics/PerformanceMonitor.h"
@@ -52,6 +53,10 @@ class RadioController {
   bool previousTrack();
   bool nextTrack();
   bool togglePause();
+  bool sdMode() const { return sdMode_; }
+  bool setSdMode(bool enabled);
+  bool playSdFile(const String& path, int32_t seconds = -1);
+  SdLibrary& sdLibrary() { return sdLibrary_; }
   void setVolume(uint8_t value);
   uint8_t volume() const;
   void setBrightness(uint8_t value);
@@ -118,6 +123,9 @@ class RadioController {
   static String stationUrlAction(void* context, size_t index);
   static size_t currentStationAction(void* context);
   static bool selectStationAction(void* context, size_t index);
+  static void prepareSelectorAction(void* context);
+  static bool sdModeAction(void* context);
+  static String selectorPathAction(void* context);
   static void openPresetsAction(void* context);
   static void cycleWeatherModeAction(void* context);
   static void visualizerModeChangedAction(void* context, uint8_t mode);
@@ -127,6 +135,9 @@ class RadioController {
   static void diagnosticsVisibleChangedAction(void* context, bool visible);
 
   bool connectCurrentStation();
+  bool startSdFile(const String& path, int32_t seconds, bool userSelection);
+  void loadSdSelector(const String& path, size_t offset = 0);
+  bool selectSdItem(size_t index);
   bool stepTrack(int delta);
   void cycleWeatherMode();
   void resetStreamProgressWatchdog(uint32_t now);
@@ -144,6 +155,14 @@ class RadioController {
   WifiManager wifiManager_;
   PlaylistService playlist_;
   AudioEngine audio_;
+  SdLibrary sdLibrary_;
+  bool sdMode_{false};
+  String sdPath_;
+  int32_t sdResumeSeconds_{-1};
+  String sdSelectorDirectory_{"/"};
+  size_t sdSelectorOffset_{0};
+  bool sdSelectorReady_{false};
+  std::vector<SdLibrary::Entry> sdSelectorItems_;
   StationMetadataService metadata_;
   LogoManager logoManager_;
   DisplayManager display_;
