@@ -28,6 +28,7 @@ class AudioEngine {
   void loop();
 
   bool connect(const String& url);
+  bool connectFile(fs::FS& fs, const String& path, int32_t seconds = -1);
   bool speak(const String& text, const String& lang);
   void stop();
   bool togglePause();

@@ -17,8 +17,7 @@ constexpr const char* kGoogleTtsTempPath = "/clock_tts.mp3";
 
 // A hálózati stream olvasása (Audio::loop) saját taskban fut, a fő loop
 // (LVGL, PNG-dekódolás, HTTP/TLS borító-, metaadat- és időjáráskérések,
-// webszerver) blokkolásától függetlenül.  Ugyanaz az elv, mint a jRadio
-// "radio_decode" taskjánál: a puffer töltése soha nem vár a kijelzőre.
+// webszerver) blokkolásától függetlenül.  Az az elv, hogy a puffer töltése soha nem vár a kijelzőre.
 // A fő loopTask prioritása 1; ez fölötte fut, ugyanazon a magon, így a
 // hosszú UI-munkát rövid időre megszakítja, majd vTaskDelay-jel visszaadja.
 #ifndef AUDIO_STREAM_TASK_CORE
@@ -28,7 +27,7 @@ constexpr const char* kGoogleTtsTempPath = "/clock_tts.mp3";
 #define AUDIO_STREAM_TASK_PRIORITY 3
 #endif
 #ifndef AUDIO_STREAM_TASK_STACK_BYTES
-// A stack a PSRAM-ban van (mint a jRadio radio_decode taskjánál), így a
+// A stack a PSRAM-ban van, így a
 // szűkös belső heapből (logó-, borítótaskok) semmit nem vesz el.  Ez a task
 // nem nyúl a flash-hez: a helyi fájlos TTS-t a fő loop olvassa.
 #define AUDIO_STREAM_TASK_STACK_BYTES 12288
@@ -369,6 +368,35 @@ bool AudioEngine::connect(const String& url) {
   return connected;
 }
 
+bool AudioEngine::connectFile(fs::FS& fs, const String& path, int32_t seconds) {
+  stop();
+  if (logQueue_) xQueueReset(logQueue_);
+  if (artworkQueue_) xQueueReset(artworkQueue_);
+  endOfFile_ = false;
+  connectAttempted_ = true;
+  connectStartedAt_ = millis();
+  suppressEndOfFile_ = true;
+  if (metadataMutex_ && xSemaphoreTake(metadataMutex_, portMAX_DELAY)) {
+    codec_ = "";
+    bitrateKbps_ = 0;
+    xSemaphoreGive(metadataMutex_);
+  }
+  lockAudio();
+  // SD_MMC reads run independently of web requests and display updates.
+  // Flash-backed speech keeps its separate main-loop path.
+  localFilePlayback_ = false;
+  const bool ok = audio_.connecttoFS(fs, path.c_str(), seconds);
+  unlockAudio();
+  tcpConnected_ = ok;
+  currentUrl_ = path;
+  streamReadyAt_ = ok ? max(1UL, millis()) : 0;
+  stateCode_ = ok ? "SD" : "SD!";
+  statusText_ = ok ? "SD" : "SD read error";
+  suppressEndOfFile_ = false;
+  setOutputEnabled(ok);
+  return ok;
+}
+
 bool AudioEngine::speak(const String& text, const String& lang) {
   String speech = text;
   speech.trim();
@@ -414,6 +442,9 @@ void AudioEngine::stop() {
   suppressEndOfFile_ = true;
   lockAudio();
   audio_.setDefaults();
+  // Discard diagnostics and artwork queued by the source that just stopped.
+  if (logQueue_) xQueueReset(logQueue_);
+  if (artworkQueue_) xQueueReset(artworkQueue_);
   localFilePlayback_ = false;
   unlockAudio();
   suppressEndOfFile_ = false;
@@ -694,6 +725,10 @@ void AudioEngine::handleAudioInfo(Audio::msg_t message) {
       connectStartedAt_ = millis();
     }
     Serial.printf("[audio] %s\n", text);
+    // Decoder lifecycle messages are diagnostics, not user-facing failures.
+    // Deferred events from the previous source must not overwrite SD/STOP.
+    if (strstr(text, "Decoder has been destroyed") ||
+        strstr(text, "Decoder has been initialized")) return;
     if (metadataMutex_ &&
         xSemaphoreTake(metadataMutex_, pdMS_TO_TICKS(30))) {
       statusText_ = text;
@@ -725,11 +760,17 @@ void AudioEngine::handleAudioInfo(Audio::msg_t message) {
   } else if (message.e == Audio::evt_id3data) {
     String value = normalizeDisplayText(String(text));
     value.trim();
-    if (value.startsWith("Artist:")) {
-      artist_ = value.substring(7);
+    int separator = value.indexOf(':');
+    const int equals = value.indexOf('=');
+    if (equals >= 0 && (separator < 0 || equals < separator)) separator = equals;
+    String key = separator >= 0 ? value.substring(0, separator) : String();
+    key.trim();
+    key.toLowerCase();
+    if (key == "artist") {
+      artist_ = value.substring(separator + 1);
       artist_.trim();
-    } else if (value.startsWith("Title:")) {
-      title_ = value.substring(6);
+    } else if (key == "title") {
+      title_ = value.substring(separator + 1);
       title_.trim();
     }
     if (!artist_.isEmpty() && !title_.isEmpty()) {
