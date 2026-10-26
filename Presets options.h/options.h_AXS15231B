@@ -3,7 +3,7 @@
 
 /* esp32-S3-devkit-C1 44 pins https://randomnerdtutorials.com/esp32-s3-devkitc-pinout-guide */
 
-/* HSPI (SPI 2) GPIO 11 - MOSI, GPIO 12 - CLK, GPIO 13 - MISO, GPIO 10 - CS */
+/* ESP32-S3: FSPI=SPI2, HSPI=SPI3; signals can be routed to configured GPIOs. */
 
 #pragma once
 
@@ -11,8 +11,8 @@
     #define ARDUINO_ESP32S3_DEV
 #endif
 
-#define LANGUAGE HU // HU EN DE PL: alapnyelv az elso telepiteskor; kesobb a webes valasztas az ervenyes.
-#define NAMEDAYS_FILE HU // Regi kompatibilitasi beallitas; a nevnapok a kivalasztott LANGUAGE/webes nyelvet kovetik.
+#define LANGUAGE HU // HU PL EN DE Enter your own language here!!
+#define NAMEDAYS_FILE HU // HU PL EN DE
 /*****************************************/
 
 /* LCD DISPLAY
@@ -87,14 +87,14 @@
 
 /* Album cover lookup */
 #define USE_LASTFM_COVER
-#define LASTFM_API_KEY "saját API-key kell ide"    // itt regisztrálhatsz hozzá szabadon: https://www.last.fm/api/authentication
+#define LASTFM_API_KEY "9b120bd8ad9b0cf43f7918f284bcb9d6"
 /*****************************************/
 
 /* ENCODER 1 */
 #define ENC_BTNR 16 // S1
 #define ENC_BTNL 15 // S2
 #define ENC_BTNB 7  // KEY
-#define ENC_INTERNALPULLUP true
+// #define ENC_INTERNALPULLUP true
 
 /* ENCODER 2 */
 // #define ENC2_BTNR 16 // S2
