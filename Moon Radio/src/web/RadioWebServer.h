@@ -29,6 +29,8 @@ class RadioWebServer {
   void fsInfo();
   void fsList();
   void fsRead();
+  void fsUploadChunk();
+  void fsUploadFinished();
   void fsDelete();
   void fsMkdir();
   void fsRmdir();
@@ -65,6 +67,11 @@ class RadioWebServer {
   File backgroundUploadFile_;
   File logoUploadFile_;
   File artworkUploadFile_;
+  File fsUploadFile_;
+  String fsUploadPath_, fsUploadTemporary_, fsUploadError_;
+  size_t fsUploadBytes_{0};
+  int fsUploadStatus_{400};
+  bool fsUploadStarted_{false}, fsUploadComplete_{false};
   String backgroundUploadPath_;
   String backgroundUploadError_;
   String logoUploadPath_;

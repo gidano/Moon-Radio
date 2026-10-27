@@ -72,8 +72,9 @@ bool removeRecursive(const String& path) {
     if (LittleFS.exists(filePath) && !LittleFS.remove(filePath)) ok = false;
     delay(0);
   }
-  for (auto it = dirs.rbegin(); it != dirs.rend(); ++it) {
-    const String& dirPath = *it;
+  // collectRemoveTargets appends directories after their descendants.
+  // Remove them in that order: a parent cannot be removed while still nonempty.
+  for (const String& dirPath : dirs) {
     if (dirPath != "/" && LittleFS.exists(dirPath) && !LittleFS.rmdir(dirPath)) {
       ok = false;
     }
@@ -147,6 +148,40 @@ void RadioWebServer::loop() {
 
 void RadioWebServer::registerRoutes() {
   server_.on("/", HTTP_GET, [this]() { serveHome(); });
+  server_.on("/dlna", HTTP_GET, [this]() {
+    serveFile("/web/dlna.html", "text/html; charset=utf-8");
+  });
+  server_.on("/api/dlna", HTTP_GET, [this]() {
+    if (radio_.fsMaintenance()) { server_.send(409, kJson, "{\"error\":\"Maintenance\"}"); return; }
+    SoapString json = radio_.dlna().json();
+    // Send directly from PSRAM, without a full-size Arduino String copy.
+    if (!json.endsWith("}")) { server_.send(503, kJson, "{\"error\":\"memory\"}"); return; }
+    server_.sendHeader("Cache-Control", "no-store");
+    server_.setContentLength(json.length()); server_.send(200, kJson, "");
+    server_.sendContent(json.c_str(), json.length());
+  });
+  server_.on("/api/dlna/scan", HTTP_POST, [this]() {
+    const bool ok = radio_.setDlnaMode() && radio_.dlna().scan();
+    server_.send(ok ? 202 : 409, kJson, ok ? "{\"ok\":true}" : "{\"ok\":false}");
+  });
+  server_.on("/api/dlna/servers", HTTP_POST, [this]() {
+    const bool ok = !radio_.fsMaintenance() && radio_.dlnaMode() && radio_.dlna().showServers();
+    server_.send(ok ? 200 : 409, kJson, ok ? "{\"ok\":true}" : "{\"ok\":false}");
+  });
+  server_.on("/api/dlna/browse", HTTP_POST, [this]() {
+    const String srv = argument("server"), offset = argument("offset"), revision = argument("revision");
+    auto digits = [](const String& s) { if (s.isEmpty() || s.length() > 9) return false; for (char c : s) if (c < '0' || c > '9') return false; return true; };
+    const bool ok = digits(srv) && digits(offset) && digits(revision) &&
+      !radio_.fsMaintenance() && radio_.dlnaMode() &&
+      radio_.dlna().browse(srv.toInt(), argument("id"), argument("title"), offset.toInt(), revision.toInt());
+    server_.send(ok ? 202 : 409, kJson, ok ? "{\"ok\":true}" : "{\"ok\":false}");
+  });
+  server_.on("/api/dlna/play", HTTP_POST, [this]() {
+    const String index = argument("index"), revision = argument("revision");
+    auto digits = [](const String& s) { if (s.isEmpty() || s.length() > 9) return false; for (char c : s) if (c < '0' || c > '9') return false; return true; };
+    const bool ok = digits(index) && digits(revision) && radio_.playDlna(index.toInt(), revision.toInt());
+    server_.send(ok ? 200 : 409, kJson, ok ? "{\"ok\":true}" : "{\"ok\":false}");
+  });
   server_.on("/search", HTTP_GET,
              [this]() { serveFile(String("/web/search_") + radio_.uiLanguage() + ".html", "text/html; charset=utf-8"); });
   server_.on("/settings", HTTP_GET,
@@ -180,7 +215,8 @@ void RadioWebServer::registerRoutes() {
   });
   server_.on("/api/source", HTTP_POST, [this]() {
     const String source = argument("source");
-    const bool ok = (source == "sd" || source == "radio") && radio_.setSdMode(source == "sd");
+    const bool ok = source == "dlna" ? radio_.setDlnaMode() :
+        (source == "sd" || source == "radio") && radio_.setSdMode(source == "sd");
     server_.send(ok ? 200 : 400, kJson, ok ? "{\"ok\":true}" : "{\"ok\":false}");
   });
   server_.on("/api/status", HTTP_GET, [this]() { sendStatus(); });
@@ -205,6 +241,8 @@ void RadioWebServer::registerRoutes() {
   server_.on("/api/fs/info", HTTP_GET, [this]() { fsInfo(); });
   server_.on("/api/fs/list", HTTP_GET, [this]() { fsList(); });
   server_.on("/api/fs/read", HTTP_GET, [this]() { fsRead(); });
+  server_.on("/upload", HTTP_POST, [this]() { fsUploadFinished(); }, [this]() { fsUploadChunk(); });
+  server_.on("/api/fs/upload", HTTP_POST, [this]() { fsUploadFinished(); }, [this]() { fsUploadChunk(); });
   server_.on("/api/fs/delete", HTTP_POST, [this]() { fsDelete(); });
   server_.on("/api/fs/mkdir", HTTP_POST, [this]() { fsMkdir(); });
   server_.on("/api/fs/rmdir", HTTP_POST, [this]() { fsRmdir(); });
@@ -664,7 +702,7 @@ void RadioWebServer::sendStations() {
 void RadioWebServer::sendStatus() {
   const AudioSnapshot audio = radio_.audioSnapshot();
   String json = "{\"currentIndex\":" + String(radio_.currentIndex());
-  json += ",\"source\":\"" + String(radio_.sdMode() ? "sd" : "radio") + "\"";
+  json += ",\"source\":\"" + String(radio_.dlnaMode() ? "dlna" : radio_.sdMode() ? "sd" : "radio") + "\"";
   json += ",\"volume\":" + String(radio_.volume());
   json += ",\"paused\":" + String(audio.paused ? "true" : "false");
   json += ",\"stationName\":\"" + jsonEscape(audio.stationName) + "\"";
@@ -1118,6 +1156,83 @@ void RadioWebServer::fsRead() {
     delay(0);
   }
   file.close();
+}
+
+void RadioWebServer::fsUploadChunk() {
+  HTTPUpload& upload = server_.upload();
+  if (upload.status == UPLOAD_FILE_START) {
+    if (fsUploadStarted_) {
+      fsUploadError_ = "Only one file is accepted per request"; fsUploadStatus_ = 400;
+      if (fsUploadFile_) fsUploadFile_.close();
+      if (!fsUploadTemporary_.isEmpty()) LittleFS.remove(fsUploadTemporary_);
+      return;
+    }
+    fsUploadStarted_ = true; fsUploadComplete_ = false; fsUploadBytes_ = 0;
+    fsUploadPath_ = ""; fsUploadTemporary_ = ""; fsUploadError_ = ""; fsUploadStatus_ = 400;
+    if (!radio_.enterFsMaintenance()) {
+      fsUploadStatus_ = 503; fsUploadError_ = "Filesystem is busy; retry after maintenance is ready"; return;
+    }
+    const String requested = server_.hasArg("path") ? server_.arg("path") : upload.filename;
+    if (!normalizeFsPath(requested, fsUploadPath_) || fsUploadPath_.startsWith("/.moon-upload-")) {
+      fsUploadError_ = "Invalid destination path"; return;
+    }
+    File target = LittleFS.open(fsUploadPath_, FILE_READ);
+    if (target && target.isDirectory()) {
+      target.close(); fsUploadStatus_ = 409; fsUploadError_ = "Destination is a directory"; return;
+    }
+    if (target) target.close();
+    if (!ensureParentDirectories(fsUploadPath_)) {
+      fsUploadStatus_ = 500; fsUploadError_ = "Cannot create destination directory"; return;
+    }
+    fsUploadTemporary_ = "/.moon-upload-" + String(esp_random(), HEX) + ".tmp";
+    if (LittleFS.exists(fsUploadTemporary_)) {
+      fsUploadStatus_ = 409; fsUploadError_ = "Temporary filename collision; retry"; fsUploadTemporary_ = ""; return;
+    }
+    fsUploadFile_ = LittleFS.open(fsUploadTemporary_, FILE_WRITE);
+    if (!fsUploadFile_) { fsUploadStatus_ = 507; fsUploadError_ = "Cannot open temporary file; check free space"; }
+    Serial.printf("[fs-upload] start: %s\n", fsUploadPath_.c_str());
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    fsUploadBytes_ += upload.currentSize;
+    if (!fsUploadError_.isEmpty()) return;
+    if (!fsUploadFile_ || fsUploadFile_.write(upload.buf, upload.currentSize) != upload.currentSize) {
+      fsUploadStatus_ = 507; fsUploadError_ = "Write failed; check free filesystem space";
+    }
+  } else if (upload.status == UPLOAD_FILE_END) {
+    if (fsUploadFile_) { fsUploadFile_.flush(); fsUploadFile_.close(); }
+    if (fsUploadError_.isEmpty()) {
+      File check = LittleFS.open(fsUploadTemporary_, FILE_READ);
+      if (!check || check.size() != fsUploadBytes_ || upload.totalSize != fsUploadBytes_) {
+        fsUploadStatus_ = 500; fsUploadError_ = "Uploaded size does not match received file";
+      }
+      if (check) check.close();
+    }
+    fsUploadComplete_ = fsUploadError_.isEmpty();
+  } else if (upload.status == UPLOAD_FILE_ABORTED) {
+    if (fsUploadFile_) fsUploadFile_.close();
+    if (!fsUploadTemporary_.isEmpty()) LittleFS.remove(fsUploadTemporary_);
+    fsUploadError_ = "Upload connection was interrupted"; fsUploadStatus_ = 400;
+    fsUploadStarted_ = fsUploadComplete_ = false;
+    Serial.println("[fs-upload] aborted; original file preserved");
+  }
+}
+
+void RadioWebServer::fsUploadFinished() {
+  if (!fsUploadStarted_ || !fsUploadComplete_) {
+    if (!fsUploadStarted_) fsUploadStatus_ = 400;
+    if (fsUploadError_.isEmpty()) fsUploadError_ = "No complete file received; use multipart/form-data";
+  } else if (fsUploadError_.isEmpty() && !LittleFS.rename(fsUploadTemporary_, fsUploadPath_)) {
+    fsUploadStatus_ = 500; fsUploadError_ = "Cannot commit uploaded file";
+  }
+  const bool ok = fsUploadError_.isEmpty();
+  if (!ok && !fsUploadTemporary_.isEmpty()) LittleFS.remove(fsUploadTemporary_);
+  if (ok && fsUploadPath_ == "/stations.txt") radio_.reloadStations();
+  Serial.printf("[fs-upload] %s: %s (%u bytes)%s%s\n", ok ? "OK" : "FAILED", fsUploadPath_.c_str(),
+                static_cast<unsigned>(fsUploadBytes_), ok ? "" : " ", fsUploadError_.c_str());
+  server_.send(ok ? 200 : fsUploadStatus_, kJson, ok ?
+      String("{\"ok\":true,\"path\":\"") + jsonEscape(fsUploadPath_) + "\",\"size\":" + String(fsUploadBytes_) + "}" :
+      String("{\"ok\":false,\"error\":\"") + jsonEscape(fsUploadError_) + "\"}");
+  fsUploadStarted_ = fsUploadComplete_ = false;
+  fsUploadPath_ = ""; fsUploadTemporary_ = ""; fsUploadError_ = ""; fsUploadBytes_ = 0;
 }
 
 void RadioWebServer::fsDelete() {
