@@ -20,6 +20,9 @@ elérhető kezeléssel.
 ## Főbb funkciók
 
 - Internetes rádióadók és helyi hálózati M3U lejátszási listák lejátszása.
+- DLNA hálózati zenelejátszás: a rádió megkeresi a helyi hálózat PC-n, NAS-on
+  vagy szerveren elérhető DLNA-médiatárakat, amelyek mappái böngészhetők,
+  zeneszámai pedig közvetlenül lejátszhatók a kijelzőről vagy a webes felületről.
 - Helyi zenelejátszás SD-kártyáról a FREENOVE FNK0104S beépített
   SD_MMC-olvasójával vagy az ILI9488/ST7796 profilok SPI-s olvasójával,
   mappa- és fájlböngészéssel.
@@ -99,7 +102,9 @@ zenemappák streamelésére szolgáló kiegészítővel.
 
 A firmware fájllistázási, letöltési és törlési végpontjait a
 `WiFi_manager_v0.6.0` csomagban lévő Wi‑Fi Partition Manager is használhatja.
-Általános fájlfeltöltéshez használd a soros `uploadfs` műveletet.
+A fájlkezelő Wi-Fi-s feltöltése is támogatott (`POST /upload`). A rádió
+ideiglenes fájlba fogadja az adatokat, és csak a teljes feltöltés után
+cseréli le a célfájlt; megszakításkor az eredeti fájl megmarad.
 A programban válaszd a **WiFi / IP** kapcsolatot, majd add meg a kijelzőn
 látható rádió-IP-címet (később az LVGL Radio feliratot érintve hívható elő).
 Portot vagy külön útvonalat nem kell megadni.
@@ -111,6 +116,7 @@ Wi‑Fi-n elérhető műveletek:
 
 - teljes LittleFS könyvtárfa listázása;
 - fájlok letöltése;
+- fájlok feltöltése és cseréje;
 - könyvtárak létrehozása és törlése;
 - fájlok törlése;
 - a rádió újraindítása.
@@ -180,6 +186,9 @@ controls accessible via a web browser.
 ## Key features
 
 - Plays internet radio stations and local network M3U playlists.
+- DLNA network music playback: the radio discovers DLNA media libraries on
+  PCs, NAS devices or servers on the local network. Browse their folders and
+  play music directly from the device display or the web interface.
 - Plays local music from the FREENOVE FNK0104S integrated SD_MMC reader or
   the SPI card reader configured by the ILI9488/ST7796 profiles, including
   folder and file browsing.
@@ -260,7 +269,9 @@ streaming music folders from a computer.
 
 The file listing, download and deletion endpoints can be used by the
 Wi-Fi Partition Manager included in the `WiFi_manager_v0.6.0` package.
-Use serial `uploadfs` for general filesystem uploads.
+Wi-Fi uploads are supported through `POST /upload`. The radio receives data
+into a temporary file and replaces the destination only after the complete
+upload; an interrupted transfer preserves the original file.
 In the programme, select the **WiFi / IP** connection, then enter the radio IP address
 shown on the display (this can be accessed later by tapping the ‘LVGL Radio’ label).
 No port or separate route needs to be specified.
@@ -272,6 +283,7 @@ Operations available via Wi-Fi:
 
 - listing the entire LittleFS directory tree;
 - downloading files;
+- uploading and replacing files;
 - creating and deleting directories;
 - deleting files;
 - restarting the radio.
