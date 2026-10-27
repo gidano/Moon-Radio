@@ -20,8 +20,7 @@ elérhető kezeléssel.
 ## Főbb funkciók
 
 - Internetes rádióadók és helyi hálózati M3U lejátszási listák lejátszása.
-- DLNA hálózati zenelejátszás: a rádió megkeresi a helyi hálózat PC-n, NAS-on
-  vagy szerveren elérhető DLNA-médiatárakat, amelyek mappái böngészhetők,
+- DLNA hálózati zenelejátszás: a rádió megkeresi a helyi hálózat PC-n, NAS-on, szerveren vagy telefonon (én ezt használom, ingyenes: https://github.com/thawee/musicmate)elérhető DLNA-médiatárakat, amelyek mappái böngészhetők,
   zeneszámai pedig közvetlenül lejátszhatók a kijelzőről vagy a webes felületről.
 - Helyi zenelejátszás SD-kártyáról a FREENOVE FNK0104S beépített
   SD_MMC-olvasójával vagy az ILI9488/ST7796 profilok SPI-s olvasójával,
@@ -186,9 +185,8 @@ controls accessible via a web browser.
 ## Key features
 
 - Plays internet radio stations and local network M3U playlists.
-- DLNA network music playback: the radio discovers DLNA media libraries on
-  PCs, NAS devices or servers on the local network. Browse their folders and
-  play music directly from the device display or the web interface.
+- DLNA network music playback: The radio searches the local network for PCs, NAS devices, servers, or phones (I use this one—it’s free: https://github.com/thawee/musicmate) and allows you to browse their folders and  
+play songs directly from the display or the web interface.
 - Plays local music from the FREENOVE FNK0104S integrated SD_MMC reader or
   the SPI card reader configured by the ILI9488/ST7796 profiles, including
   folder and file browsing.
