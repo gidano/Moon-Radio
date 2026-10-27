@@ -8,13 +8,13 @@
     const t = labels[document.documentElement.lang] || labels.en;
     const main = !!document.getElementById('list');
     const bar = document.createElement('div');
-    bar.style.cssText = 'display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:12px 0';
+    bar.style.cssText = 'display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;max-width:520px;margin:12px auto';
     const button = (text, action) => {
         const element = document.createElement('button');
         element.type = 'button';
         element.textContent = text;
         element.className = 'control-btn';
-        element.style.cssText = 'width:auto;height:auto;min-height:42px;padding:8px 16px;border-radius:12px';
+        element.style.cssText = 'width:auto;height:auto;min-height:42px;min-width:0;padding:8px;font-size:clamp(14px,3.8vw,20px);white-space:nowrap;border-radius:12px';
         element.onclick = action;
         return element;
     };
@@ -24,15 +24,37 @@
     let mode, directory = '/', entries = [], more = false, nextOffset = 0, generation = 0, currentPath = '';
     const radio = button(t.radio, () => choose('radio'));
     const sd = button(t.sd, () => choose('sd'));
-    bar.append(radio, sd);
+    const dlna = document.createElement('a');
+    dlna.href = '/dlna'; dlna.textContent = 'DLNA'; dlna.className = 'control-btn';
+    dlna.style.cssText = 'width:auto;height:auto;min-height:42px;min-width:0;padding:8px;font-size:clamp(14px,3.8vw,20px);white-space:nowrap;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;text-decoration:none;color:inherit';
+    bar.append(radio, sd, dlna);
     const browser = document.createElement('div');
     browser.hidden = true;
     if (main) document.getElementById('list').before(browser);
+    const dlnaHost = document.createElement('div');
+    dlnaHost.hidden = true;
+    if (main) document.getElementById('list').before(dlnaHost);
+    let dlnaComponent = null;
     const search = document.getElementById('search');
     const searchPlaceholder = search?.placeholder;
     const addForm = document.getElementById('newName')?.parentElement;
     const trackLabel = document.querySelector('.pc-stream-label');
     const originalTrackLabel = trackLabel?.textContent;
+    async function mountDlna() {
+        const request = generation;
+        try {
+            const response = await fetch('/dlna', {cache:'no-store'});
+            if (!response.ok) throw new Error('DLNA page unavailable');
+            const html = await response.text();
+            if (mode !== 'dlna' || request !== generation) return;
+            const template = new DOMParser().parseFromString(html, 'text/html').getElementById('dlna-browser');
+            if (!template || !window.mountDlnaBrowser) throw new Error('DLNA browser unavailable');
+            dlnaHost.replaceChildren(document.importNode(template, true));
+            dlnaComponent = window.mountDlnaBrowser(dlnaHost.firstElementChild, true);
+        } catch (_) {
+            if (mode === 'dlna' && request === generation) message(t.playError);
+        }
+    }
     const message = text => { if (main) document.getElementById('status').textContent = text; else alert(text); };
     async function post(url, fields) {
         const response = await fetch(url, {method:'POST', body:new URLSearchParams(fields)});
@@ -108,26 +130,37 @@
         const changed = mode !== state.source;
         mode = state.source || 'radio';
         window.moonSdMode = mode === 'sd';
+        window.moonDlnaMode = mode === 'dlna';
         radio.setAttribute('aria-pressed', String(mode === 'radio'));
         sd.setAttribute('aria-pressed', String(mode === 'sd'));
+        if (mode === 'dlna') dlna.setAttribute('aria-current','page'); else dlna.removeAttribute('aria-current');
         radio.style.outline = mode === 'radio' ? '2px solid #7fd' : '';
         sd.style.outline = mode === 'sd' ? '2px solid #7fd' : '';
+        dlna.style.outline = mode === 'dlna' ? '2px solid #7fd' : '';
         if (!main) return;
         browser.hidden = mode !== 'sd';
-        if (trackLabel) trackLabel.textContent = mode === 'sd' ? 'SD' : originalTrackLabel;
-        if (addForm) addForm.style.display = mode === 'sd' ? 'none' : '';
+        dlnaHost.hidden = mode !== 'dlna';
+        document.getElementById('list').hidden = mode === 'dlna';
+        document.getElementById('status').hidden = mode === 'dlna';
+        if (search) search.hidden = mode === 'dlna';
+        if (trackLabel) trackLabel.textContent = mode === 'dlna' ? 'DLNA' : mode === 'sd' ? 'SD' : originalTrackLabel;
+        if (addForm) addForm.style.display = mode !== 'radio' ? 'none' : '';
         if (search) search.placeholder = mode === 'sd' ? t.search : searchPlaceholder;
         const trackChanged = currentPath !== state.url;
         currentPath = state.url || '';
         if (changed) {
             ++generation;
+            dlnaComponent?.destroy(); dlnaComponent = null;
+            dlnaHost.replaceChildren();
             if (search) search.value = '';
             if (mode === 'sd') {
                 document.getElementById('list').replaceChildren();
                 load('/');
-            } else window.fetchStations?.();
+            } else if (mode === 'dlna') mountDlna();
+            else window.fetchStations?.();
         } else if (mode === 'sd' && trackChanged) render();
     };
     if (search) search.addEventListener('input', () => { if (mode === 'sd') render(); });
     fetch('/api/status', {cache:'no-store'}).then(r => r.json()).then(window.updateSdState).catch(() => {});
 })();
+

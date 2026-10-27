@@ -1,0 +1,23 @@
+.dlna-browser{color:#e0e0e0;text-align:left;min-width:0}
+.dlna-browser [hidden]{display:none!important}
+.container [hidden]{display:none!important}
+.dlna-browser a{color:#00e5ff}
+.dlna-browser h1{font-weight:400;color:#00e5ff}
+.dlna-browser h2{font-size:1.3rem;overflow-wrap:anywhere}
+.dlna-browser button{font:inherit;padding:10px 14px;background:#25343a;color:#fff;border:1px solid #48616a;border-radius:9px;cursor:pointer;min-height:44px}
+.dlna-browser button:disabled{opacity:.45;cursor:default}
+.dlna-browser .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}
+.dlna-browser #items{list-style:none;padding:0}
+.dlna-browser #items li{margin:8px 0}
+.dlna-browser #items button{width:100%;text-align:left;overflow-wrap:anywhere;display:flex;gap:12px;align-items:center}
+.dlna-browser #items small{display:block;color:#b4c8cd;margin-top:4px}
+.dlna-browser #message{min-height:1.6em;color:#bdd7dd}
+.dlna-browser #now{padding:14px;background:#1e1e1e;border-radius:10px;overflow-wrap:anywhere}
+.dlna-browser #page{align-self:center}
+.dlna-browser details{margin-top:28px;color:#a9c0c7}
+.dlna-browser dl{display:grid;grid-template-columns:1fr auto;gap:8px}
+.dlna-browser dt,.dlna-browser dd{margin:0}
+.station-add-form{display:grid;grid-template-columns:minmax(0,1fr) 48px;gap:8px;margin:12px 0}
+.station-add-form .search-box{margin:0;width:100%;min-width:0;box-sizing:border-box;height:48px}
+.station-add-form #newName,.station-add-form #newUrl{grid-column:1/-1}
+.station-add-form .add-station-btn{width:48px;height:48px;min-width:48px;margin:0;padding:0;border-radius:12px;font-size:28px;display:grid;place-items:center;line-height:1}

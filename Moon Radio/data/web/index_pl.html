@@ -305,6 +305,8 @@
 
     </style>
     <script src="/web/language.js" defer></script>
+    <link rel="stylesheet" href="/web/dlna.css">
+    <script src="/web/dlna.js" defer></script>
     <script src="/web/sd.js" defer></script>
 </head>
 <body>
@@ -367,11 +369,11 @@
             </div>
         </div>
         
-        <div style="display:flex; gap:8px; margin: 12px 0; flex-wrap: wrap; justify-content:center;">
-            <input id="newName" class="search-box" style="margin:0; flex: 1; min-width: 220px;" placeholder="Nowa nazwa stacji">
-            <input id="newUrl"  class="search-box" style="margin:0; flex: 2; min-width: 260px;" placeholder="Adres URL strumienia">
-            <input id="newHomepage" class="search-box" style="margin:0; flex: 2; min-width: 260px;" placeholder="Strona stacji (opcjonalnie)">
-            <button class="control-btn" style="width:auto; padding:0 14px; height:48px; border-radius:12px;" onclick="addStation()">+</button>
+        <div class="station-add-form">
+            <input id="newName" class="search-box" placeholder="Nowa nazwa stacji">
+            <input id="newUrl"  class="search-box" placeholder="Adres URL strumienia">
+            <input id="newHomepage" class="search-box" placeholder="Strona stacji (opcjonalnie)">
+            <button class="control-btn add-station-btn" title="Dodaj stację" aria-label="Dodaj stację" onclick="addStation()">+</button>
         </div>
 
 <input type="text" id="search" class="search-box" placeholder="🔍 Szukaj stacji..." onkeyup="filterStations()">
@@ -648,7 +650,7 @@
         }
 
         function highlightCurrentStation() {
-            if (window.moonSdMode) return;
+            if (window.moonSdMode || window.moonDlnaMode) return;
             document.querySelectorAll('.station-btn').forEach(btn => {
                 if (btn.dataset.index == currentIndex) {
                     btn.classList.add('active');
@@ -659,7 +661,7 @@
         }
 
         function renderStationList() {
-            if (window.moonSdMode) return;
+            if (window.moonSdMode || window.moonDlnaMode) return;
             const listDiv = document.getElementById('list');
             listDiv.innerHTML = '';
 
@@ -863,7 +865,7 @@ editBtn.onclick = (e) => {
         }
 
         function filterStations() {
-            if (window.moonSdMode) return;
+            if (window.moonSdMode || window.moonDlnaMode) return;
             const searchText = document.getElementById('search').value.toLowerCase();
             const buttons = document.querySelectorAll('.station-btn');
             
@@ -994,3 +996,5 @@ fetchJasność();
     </script>
 </body>
 </html>
+
+

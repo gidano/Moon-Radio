@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Moon Radio · DLNA</title>
+  <link rel="icon" href="/web/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/web/dlna.css">
+  <style>
+    :root{color-scheme:dark;font-family:system-ui,sans-serif;background:#121212;color:#e0e0e0}
+    body{max-width:680px;margin:auto;padding:24px 16px}a{color:#00e5ff}h1{font-weight:400;color:#00e5ff}
+  </style>
+  <script src="/web/dlna.js" defer></script>
+</head>
+<body>
+<section id="dlna-browser" class="dlna-browser">
+  <a href="/" data-t="home" data-dlna-standalone>Vissza a rádióhoz</a>
+  <h1 data-t="title" data-dlna-standalone>Hálózati zene</h1>
+  <p data-t="intro" data-dlna-standalone>PC vagy NAS megosztott zenetárának böngészése és lejátszása.</p>
+  <div class="toolbar"><button id="scan" data-t="scan">Szerverek keresése</button><button id="radio" data-t="radio" data-dlna-standalone>Rádióforrás</button></div>
+  <p id="message" role="status" aria-live="polite"></p>
+  <h2 id="heading"></h2>
+  <div class="toolbar"><button id="up" data-t="up">Vissza</button><button id="previousPage" data-t="previousPage">Előző oldal</button><span id="page"></span><button id="nextPage" data-t="nextPage">Következő oldal</button></div>
+  <ul id="items"></ul>
+  <div id="now" data-dlna-standalone>—</div>
+  <div class="toolbar" data-dlna-standalone><button id="previousTrack" data-t="previousTrack">Előző szám</button><button id="pause" data-t="pause">Szünet / lejátszás</button><button id="nextTrack" data-t="nextTrack">Következő szám</button></div>
+  <p data-t="queueNote">A számok az indításkor megnyitott oldalról követik egymást. Más mappa böngészése ezt nem módosítja.</p>
+  <details><summary data-t="memory">Memória</summary><dl id="memory"></dl></details>
+</section>
+</body>
+</html>
