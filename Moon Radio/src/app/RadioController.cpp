@@ -182,6 +182,9 @@ bool RadioController::begin() {
       .diagnosticsVisibleChanged = diagnosticsVisibleChangedAction,
       .prepareSelector = prepareSelectorAction,
       .sdMode = sdModeAction,
+      .dlnaMode = dlnaModeAction,
+      .sourceMode = sourceModeAction,
+      .selectSource = selectSourceAction,
       .toggleSource = toggleSourceAction,
       .selectorPath = selectorPathAction,
   };
@@ -370,7 +373,7 @@ void RadioController::loop() {
       !running || audio_.paused() ||
       audio_.streamReadyForMs() >= kBackgroundAfterStreamReadyMs ||
       audio_.msSinceConnect() >= kBackgroundMaxHoldMs;
-  if (backgroundAllowed) {
+  if (backgroundAllowed && !dlna_.busy()) {
     // A MyOnlineRadio HTTPS-címlekérés közben ne induljon egy második, szintén
     // hálózatot és belső RAM-ot használó borítófeladat.
     if (!metadata_.busy() && now - lastArtworkAt_ >= kArtworkServiceMs) {
@@ -379,7 +382,7 @@ void RadioController::loop() {
       while (audio_.takeArtworkEvent(artworkEvent)) {
         if (artworkEvent.kind == AudioEngine::ArtworkEventKind::IcyLogo) {
           logoManager_.setIcyLogo(artworkEvent.text, currentPlayUrl_);
-        } else if (!sdMode_ && !playlist_.active()) {
+        } else if (!sdMode_ && !dlnaMode_ && !playlist_.active()) {
           std::vector<uint32_t> segments;
           segments.reserve(artworkEvent.segmentValues);
           for (uint8_t index = 0; index < artworkEvent.segmentValues; ++index)
@@ -393,7 +396,7 @@ void RadioController::loop() {
                         snapshot.bitrateKbps, snapshot.bufferPercent);
     }
 
-    if (!sdMode_ && !logoManager_.busy() && now - lastMetadataAt_ >= kMetadataServiceMs) {
+    if (!sdMode_ && !dlnaMode_ && !dlna_.busy() && !logoManager_.busy() && now - lastMetadataAt_ >= kMetadataServiceMs) {
       lastMetadataAt_ = now;
       metadata_.loop(wifiConnected, running, bufferFilled);
     }
@@ -401,7 +404,7 @@ void RadioController::loop() {
     // Az óránkénti időjárásfrissítés néhány másodperces halasztása nem számít,
     // de az indításuk egyidejűsége kis tartalékú rádióknál az audio streamet
     // szoríthatja ki. A metadata út már ugyanezt a kizárást használja.
-    if (!logoManager_.busy()) weather_.loop(wifiConnected);
+    if (!dlna_.busy() && !logoManager_.busy()) weather_.loop(wifiConnected);
   }
   performanceMonitor_.update();
   if (now - lastWifiLoopAt_ >= kWifiServiceMs) {
@@ -410,7 +413,7 @@ void RadioController::loop() {
   }
   if (wifiConnected && !wifiWasConnected_ && !fsMaintenance_) {
     applyTimezone();
-    if (!sdMode_ && stationStore_.count() > 0) connectCurrentStation();
+    if (!sdMode_ && (dlnaMode_ || stationStore_.count() > 0)) connectCurrentStation();
   }
   wifiWasConnected_ = wifiConnected;
   if (web_ && now - lastWebLoopAt_ >= kWebServiceMs) {
@@ -418,10 +421,13 @@ void RadioController::loop() {
     web_->loop();
   }
 
+  if (dlnaMode_) syncDlnaSelector();
   processClockTts(now);
 
   if (!clockTtsActive_ && audio_.consumeEndOfFile()) {
-    if (sdMode_) {
+    if (dlnaMode_) {
+      if (!stepTrack(1)) audio_.stop();
+    } else if (sdMode_) {
       stepTrack(1);
     } else if (playlist_.active()) {
       stepTrack(1);
@@ -431,7 +437,7 @@ void RadioController::loop() {
     }
   }
 
-  if (!sdMode_ && connectRetryPending_ && wifiConnected &&
+  if (!sdMode_ && !dlnaMode_ && connectRetryPending_ && wifiConnected &&
       static_cast<int32_t>(now - nextConnectRetryAt_) >= 0) {
     connectRetryPending_ = false;
     Serial.println("[radio] M3U kapcsolat ujraprobalasa");
@@ -464,16 +470,16 @@ WifiManager& RadioController::wifi() { return wifiManager_; }
 size_t RadioController::currentIndex() const { return currentIndex_; }
 
 const Station* RadioController::currentStation() const {
-  return sdMode_ ? nullptr : stationStore_.get(currentIndex_);
+  return (sdMode_ || dlnaMode_) ? nullptr : stationStore_.get(currentIndex_);
 }
 
 AudioSnapshot RadioController::audioSnapshot() {
   const Station* station = currentStation();
   AudioSnapshot snapshot =
-      audio_.snapshot(sdMode_ ? String("SD") : station ? station->name : String(Language::text("Nincs állomás")));
+      audio_.snapshot(dlnaMode_ ? String("DLNA") : sdMode_ ? String("SD") : station ? station->name : String(Language::text("Nincs állomás")));
   // A MyOnlineRadio által adott aktuális cím pontosabb, mint az érintett
   // adók gyakran csak szlogent vagy műsornevet küldő stream-metaadata.
-  const String externalTitle = sdMode_ ? String() : metadata_.title();
+  const String externalTitle = (sdMode_ || dlnaMode_) ? String() : metadata_.title();
   if (!externalTitle.isEmpty()) {
     snapshot.streamTitle = externalTitle;
   } else if (snapshot.streamTitle.isEmpty() && !playlistTitle_.isEmpty()) {
@@ -496,6 +502,8 @@ bool RadioController::selectStation(size_t index) {
   const Station* station = stationStore_.get(index);
   if (!station) return false;
   resetClockTtsPlayback(true);
+  dlnaMode_ = false;
+  dlna_.close(); resetDlnaSelector();
   sdMode_ = false;
   sdSelectorReady_ = false;
   display_.refreshStationSelector();
@@ -521,13 +529,13 @@ bool RadioController::selectStation(size_t index) {
 }
 
 bool RadioController::previousStation() {
-  if (sdMode_) return stepTrack(-1);
+  if (sdMode_ || dlnaMode_) return stepTrack(-1);
   const size_t count = stationStore_.count();
   return count > 0 && selectStation((currentIndex_ + count - 1) % count);
 }
 
 bool RadioController::nextStation() {
-  if (sdMode_) return stepTrack(1);
+  if (sdMode_ || dlnaMode_) return stepTrack(1);
   const size_t count = stationStore_.count();
   return count > 0 && selectStation((currentIndex_ + 1) % count);
 }
@@ -556,7 +564,7 @@ void RadioController::resetStreamProgressWatchdog(uint32_t now) {
 
 void RadioController::recoverStalledStream(uint32_t now, bool wifiConnected,
                                            size_t bufferFilled) {
-  if (sdMode_ || !wifiConnected || audio_.paused() || clockTtsActive_ ||
+  if (sdMode_ || dlnaMode_ || !wifiConnected || audio_.paused() || clockTtsActive_ ||
       clockTtsFadingDown_ || clockTtsFadingUp_ || connectRetryPending_ ||
       currentPlayUrl_.isEmpty() || stationStore_.count() == 0) {
     return;
@@ -888,7 +896,7 @@ void RadioController::endBackgroundUploadMode() {
   backgroundUploadMode_ = false;
   const bool resumePlayback = backgroundUploadResumePlayback_;
   backgroundUploadResumePlayback_ = false;
-  if (resumePlayback && (sdMode_ || (wifiManager_.connected() && stationStore_.count() > 0))) {
+  if (resumePlayback && (sdMode_ || (wifiManager_.connected() && (dlnaMode_ || stationStore_.count() > 0)))) {
     connectCurrentStation();
   }
   refreshDisplay(true);
@@ -909,13 +917,14 @@ void RadioController::applyTimezone() {
 bool RadioController::reloadStations() {
   const bool ok = stationStore_.reload();
   if (currentIndex_ >= stationStore_.count()) currentIndex_ = 0;
-  if (ok && !sdMode_ && wifiManager_.connected() && !fsMaintenance_)
+  if (ok && !sdMode_ && !dlnaMode_ && wifiManager_.connected() && !fsMaintenance_)
     connectCurrentStation();
   refreshDisplay(true);
   return ok;
 }
 
 bool RadioController::enterFsMaintenance() {
+  dlna_.close(); resetDlnaSelector();
   if (!fsMaintenance_) {
     fsMaintenance_ = true;
     fsMaintenanceLogged_ = false;
@@ -946,11 +955,11 @@ size_t RadioController::bufferFree() { return audio_.bufferFree(); }
 
 size_t RadioController::bufferSize() { return audio_.bufferSize(); }
 
-bool RadioController::playlistActive() const { return playlist_.active(); }
+bool RadioController::playlistActive() const { return dlnaMode_ ? dlna_.playingCount() > 0 : playlist_.active(); }
 
-int RadioController::playlistIndex() const { return playlist_.index(); }
+int RadioController::playlistIndex() const { return dlnaMode_ ? dlna_.playingIndex() : playlist_.index(); }
 
-size_t RadioController::playlistCount() const { return playlist_.count(); }
+size_t RadioController::playlistCount() const { return dlnaMode_ ? dlna_.playingCount() : playlist_.count(); }
 
 const String& RadioController::currentPlayUrl() const {
   return currentPlayUrl_;
@@ -967,7 +976,7 @@ void RadioController::previousAction(void* context) {
 
 void RadioController::toggleAction(void* context) {
   auto* radio = static_cast<RadioController*>(context);
-  if (radio->sdMode_ && radio->display_.stationSelectorActive()) {
+  if ((radio->sdMode_ || radio->dlnaMode_) && radio->display_.stationSelectorActive()) {
     radio->display_.confirmStationSelector();
     return;
   }
@@ -1027,11 +1036,13 @@ void RadioController::setVolumeAction(void* context, uint8_t value) {
 
 size_t RadioController::stationCountAction(void* context) {
   auto* radio = static_cast<RadioController*>(context);
+  if (radio->dlnaMode_) return radio->dlnaSelectorCount();
   return radio->sdMode_ ? radio->sdSelectorItems_.size() : radio->stations().count();
 }
 
 String RadioController::stationNameAction(void* context, size_t index) {
   auto* radio = static_cast<RadioController*>(context);
+  if (radio->dlnaMode_) return radio->dlnaSelectorName(index);
   if (radio->sdMode_)
     return index < radio->sdSelectorItems_.size() ? radio->sdSelectorItems_[index].name : String();
   const Station* station =
@@ -1041,7 +1052,7 @@ String RadioController::stationNameAction(void* context, size_t index) {
 
 String RadioController::stationUrlAction(void* context, size_t index) {
   auto* radio = static_cast<RadioController*>(context);
-  if (radio->sdMode_) return String();
+  if (radio->sdMode_ || radio->dlnaMode_) return String();
   const Station* station =
       static_cast<RadioController*>(context)->stations().get(index);
   return station ? station->url : String();
@@ -1049,6 +1060,7 @@ String RadioController::stationUrlAction(void* context, size_t index) {
 
 size_t RadioController::currentStationAction(void* context) {
   auto* radio = static_cast<RadioController*>(context);
+  if (radio->dlnaMode_) return radio->dlnaSelectorState_.busy ? 0 : radio->dlnaSelectorState_.servers ? 1 : 2;
   if (radio->sdMode_) {
     for (size_t i = 0; i < radio->sdSelectorItems_.size(); ++i)
       if (radio->sdSelectorItems_[i].path == radio->sdPath_) return i;
@@ -1059,11 +1071,19 @@ size_t RadioController::currentStationAction(void* context) {
 
 bool RadioController::selectStationAction(void* context, size_t index) {
   auto* radio = static_cast<RadioController*>(context);
+  if (radio->dlnaMode_) return radio->selectDlnaItem(index);
   return radio->sdMode_ ? radio->selectSdItem(index) : radio->selectStation(index);
 }
 
 void RadioController::prepareSelectorAction(void* context) {
   auto* radio = static_cast<RadioController*>(context);
+  if (radio->dlnaMode_) {
+    const auto state = radio->dlna_.state();
+    if (!state.busy && state.servers && !state.count && !state.error[0]) radio->dlna_.scan();
+    // prepareSelector is called while constructing the overlay: update the
+    // cached state directly, without asking the display to rebuild itself.
+    radio->dlnaSelectorState_ = radio->dlna_.state();
+  }
   if (radio->sdMode_ && !radio->sdSelectorReady_)
     radio->loadSdSelector(radio->sdSelectorDirectory_, radio->sdSelectorOffset_);
 }
@@ -1072,15 +1092,112 @@ bool RadioController::sdModeAction(void* context) {
   return static_cast<RadioController*>(context)->sdMode_;
 }
 
+bool RadioController::dlnaModeAction(void* context) { return static_cast<RadioController*>(context)->dlnaMode_; }
+uint8_t RadioController::sourceModeAction(void* context) {
+  auto* radio = static_cast<RadioController*>(context);
+  return radio->dlnaMode_ ? 2 : radio->sdMode_ ? 1 : 0;
+}
+bool RadioController::selectSourceAction(void* context, uint8_t source) {
+  auto* radio = static_cast<RadioController*>(context);
+  const bool ok = source == 2 ? radio->setDlnaMode() : source <= 1 && radio->setSdMode(source == 1);
+  if (ok && source != 0) radio->display_.openStationSelector();
+  return ok;
+}
+
 void RadioController::toggleSourceAction(void* context) {
   auto* radio = static_cast<RadioController*>(context);
-  const bool enableSd = !radio->sdMode_;
-  if (radio->setSdMode(enableSd) && enableSd)
-    radio->display_.openStationSelector();
+  radio->display_.openSourceMenu();
 }
 
 String RadioController::selectorPathAction(void* context) {
-  return static_cast<RadioController*>(context)->sdSelectorDirectory_;
+  auto* radio = static_cast<RadioController*>(context);
+  return radio->dlnaMode_ ? radio->dlna_.heading() : radio->sdSelectorDirectory_;
+}
+
+void RadioController::syncDlnaSelector() {
+  const auto state = dlna_.state();
+  const bool changed = state.revision != dlnaSelectorState_.revision || state.busy != dlnaSelectorState_.busy ||
+                       strcmp(state.error, dlnaSelectorState_.error) != 0;
+  if (!state.busy && dlnaSelectorPending_) {
+    if (state.revision != dlnaSelectorSubmittedRevision_ && !state.error[0]) {
+      if (dlnaSelectorBack_) dlnaSelectorHistory_.pop_back();
+      else if (dlnaSelectorHasPrevious_) {
+        if (dlnaSelectorHistory_.size() == 64) dlnaSelectorHistory_.drop_front();
+        dlnaSelectorHistory_.push_back(dlnaSelectorPrevious_);
+      }
+    }
+    dlnaSelectorPending_ = false;
+  } else if (!state.busy && state.revision != dlnaSelectorState_.revision) {
+    // Browsing from the web can replace the listing too. Do not retain a
+    // fictitious parent path from a different client/server.
+    dlnaSelectorHistory_.reset();
+  }
+  dlnaSelectorState_ = state;
+  if (changed && display_.stationSelectorActive()) display_.refreshStationSelector();
+}
+
+void RadioController::resetDlnaSelector() {
+  dlnaSelectorHistory_.reset();
+  dlnaSelectorPrevious_ = DlnaService::Location{};
+  dlnaSelectorPending_ = false;
+  dlnaSelectorState_ = DlnaService::State{};
+}
+
+size_t RadioController::dlnaSelectorCount() const {
+  const auto& state = dlnaSelectorState_;
+  if (state.busy) return 1;
+  return (state.servers ? 1 : 2) + state.count + (state.more ? 1 : 0) + ((!state.count || state.error[0]) ? 1 : 0);
+}
+
+String RadioController::dlnaSelectorName(size_t index) {
+  const auto& state = dlnaSelectorState_;
+  if (state.busy) return Language::text("Betöltés...");
+  if (index == 0) return Language::text(state.servers ? "Szerverek keresése" : "[..] Vissza");
+  if (!state.servers && index == 1) return Language::text("Médiaszerverek");
+  const size_t prefix = state.servers ? 1 : 2;
+  if (index < prefix + state.count) return dlna_.nameAt(index - prefix, state.revision);
+  if (state.more && index == prefix + state.count) return Language::text(">> Következő oldal");
+  return Language::text(state.error[0] ? "Nem sikerült betölteni - újra" : "Nincs zenei fájl");
+}
+
+bool RadioController::browseDlnaSelector(const DlnaService::Location& location, bool back) {
+  dlnaSelectorHasPrevious_ = dlna_.location(dlnaSelectorPrevious_);
+  const bool ok = dlna_.browse(location.server, String(location.id.c_str()), String(location.title.c_str()),
+                               location.offset, dlnaSelectorState_.revision);
+  if (ok) { dlnaSelectorPending_ = true; dlnaSelectorBack_ = back; dlnaSelectorSubmittedRevision_ = dlnaSelectorState_.revision; }
+  syncDlnaSelector(); display_.openStationSelector();
+  return ok;
+}
+
+bool RadioController::selectDlnaItem(size_t index) {
+  const auto state = dlna_.state();
+  if (state.busy || state.revision != dlnaSelectorState_.revision) {
+    syncDlnaSelector(); display_.openStationSelector(); return false;
+  }
+  if (index == 0) {
+    if (state.servers) { const bool ok = dlna_.scan(); syncDlnaSelector(); display_.openStationSelector(); return ok; }
+    if (dlnaSelectorHistory_.size()) return browseDlnaSelector(dlnaSelectorHistory_[dlnaSelectorHistory_.size() - 1], true);
+    dlna_.showServers(); syncDlnaSelector(); display_.openStationSelector(); return true;
+  }
+  if (!state.servers && index == 1) {
+    dlnaSelectorHistory_.reset(); dlna_.showServers(); syncDlnaSelector(); display_.openStationSelector(); return true;
+  }
+  const size_t prefix = state.servers ? 1 : 2;
+  if (index < prefix + state.count) {
+    DlnaService::Location target; bool directory = false;
+    if (!dlna_.selection(index - prefix, state.revision, target, directory)) return false;
+    if (directory) return browseDlnaSelector(target, false);
+    const bool ok = playDlna(index - prefix, state.revision);
+    if (!ok) display_.openStationSelector();
+    return ok;
+  }
+  if (state.more && index == prefix + state.count) {
+    DlnaService::Location next;
+    if (!dlna_.location(next)) return false;
+    next.offset = state.nextOffset;
+    return browseDlnaSelector(next, false);
+  }
+  const bool ok = dlna_.scan(); syncDlnaSelector(); display_.openStationSelector(); return ok;
 }
 
 void RadioController::loadSdSelector(const String& path, size_t offset) {
@@ -1132,7 +1249,7 @@ bool RadioController::selectSdItem(size_t index) {
 
 void RadioController::openPresetsAction(void* context) {
   auto* radio = static_cast<RadioController*>(context);
-  if (radio->sdMode_) radio->display_.openStationSelector();
+  if (radio->sdMode_ || radio->dlnaMode_) radio->display_.openStationSelector();
   else radio->display_.showPresets();
 }
 
@@ -1366,15 +1483,44 @@ bool RadioController::beginClockTtsAnnouncement(const String& text,
   return true;
 }
 
+bool RadioController::setDlnaMode() {
+  if (fsMaintenance_ || backgroundUploadMode_ || !wifiManager_.connected()) return false;
+  if (dlnaMode_) return true;
+  if (dlna_.busy()) return false;
+  resetClockTtsPlayback(true);
+  audio_.stop(); playlist_.reset(); metadata_.selectStation(nullptr);
+  connectRetryPending_ = false; currentPlayUrl_ = ""; playlistTitle_ = "";
+  sdMode_ = false; dlnaMode_ = true; sdSelectorReady_ = false;
+  display_.refreshStationSelector();
+  logoManager_.selectStation("music_server", "", "", "");
+  refreshDisplay(true);
+  return true;
+}
+
+bool RadioController::playDlna(size_t index, uint32_t revision) {
+  if (fsMaintenance_ || backgroundUploadMode_ || !dlnaMode_ || !wifiManager_.connected()) return false;
+  String url, title;
+  if (!dlna_.play(index, revision, url, title)) return false;
+  resetClockTtsPlayback(true);
+  currentPlayUrl_ = url; playlistTitle_ = title;
+  connectRetryPending_ = false;
+  resetStreamProgressWatchdog(millis());
+  const bool ok = audio_.connect(url);
+  refreshDisplay(true);
+  return ok;
+}
+
 bool RadioController::setSdMode(bool enabled) {
   if (fsMaintenance_ || backgroundUploadMode_) {
     Serial.printf("[sd] source change blocked: maintenance=%u backgroundUpload=%u\n",
                   fsMaintenance_ ? 1U : 0U, backgroundUploadMode_ ? 1U : 0U);
     return false;
   }
-  if (enabled == sdMode_) return true;
+  if (enabled == sdMode_ && !dlnaMode_) return true;
   if (enabled) {
     if (!sdLibrary_.mount()) return false;
+    dlnaMode_ = false;
+    dlna_.close(); resetDlnaSelector();
     resetClockTtsPlayback(true);
     audio_.stop();
     playlist_.reset();
@@ -1391,6 +1537,8 @@ bool RadioController::setSdMode(bool enabled) {
   }
   resetClockTtsPlayback(true);
   audio_.stop();
+  dlnaMode_ = false;
+  dlna_.close(); resetDlnaSelector();
   sdMode_ = false;
   sdSelectorReady_ = false;
   display_.refreshStationSelector();
@@ -1413,6 +1561,8 @@ bool RadioController::startSdFile(const String& path, int32_t seconds, bool user
   if (fsMaintenance_ || backgroundUploadMode_ ||
       !SdLibrary::normalize(path, normalized) || !sdLibrary_.playable(normalized)) return false;
   if (userSelection) resetClockTtsPlayback(true);
+  dlnaMode_ = false;
+  dlna_.close(); resetDlnaSelector();
   sdMode_ = true;
   sdPath_ = normalized;
   const String folder = normalized.substring(0, normalized.lastIndexOf('/'));
@@ -1436,6 +1586,11 @@ bool RadioController::startSdFile(const String& path, int32_t seconds, bool user
 }
 
 bool RadioController::connectCurrentStation() {
+  if (dlnaMode_) {
+    if (!wifiManager_.connected() || !dlna_.resume(currentPlayUrl_, playlistTitle_)) return false;
+    resetStreamProgressWatchdog(millis());
+    return audio_.connect(currentPlayUrl_);
+  }
   if (sdMode_) return !sdPath_.isEmpty() && startSdFile(sdPath_, sdResumeSeconds_, false);
   const Station* station = currentStation();
   if (!station || !wifiManager_.connected()) return false;
@@ -1466,6 +1621,13 @@ bool RadioController::connectCurrentStation() {
 }
 
 bool RadioController::stepTrack(int delta) {
+  if (dlnaMode_) {
+    if (!wifiManager_.connected() || !dlna_.step(delta, currentPlayUrl_, playlistTitle_)) return false;
+    resetClockTtsPlayback(true);
+    const bool ok = audio_.connect(currentPlayUrl_);
+    refreshDisplay(true);
+    return ok;
+  }
   if (sdMode_) {
     const String next = sdLibrary_.adjacent(sdPath_.isEmpty() ? String("/") : sdPath_, delta);
     return !next.isEmpty() && playSdFile(next);
@@ -1535,3 +1697,4 @@ bool RadioController::setUiLanguage(String value) {
   refreshDisplay(true);
   return true;
 }
+

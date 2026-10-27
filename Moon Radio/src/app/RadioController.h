@@ -6,6 +6,7 @@
 #include "../audio/AudioEngine.h"
 #include "../audio/PlaylistService.h"
 #include "../audio/SdLibrary.h"
+#include "../audio/DlnaService.h"
 #include "../artwork/LogoManager.h"
 #include "../display/DisplayManager.h"
 #include "../diagnostics/PerformanceMonitor.h"
@@ -54,6 +55,10 @@ class RadioController {
   bool nextTrack();
   bool togglePause();
   bool sdMode() const { return sdMode_; }
+  bool dlnaMode() const { return dlnaMode_; }
+  bool setDlnaMode();
+  bool playDlna(size_t index, uint32_t revision);
+  DlnaService& dlna() { return dlna_; }
   bool setSdMode(bool enabled);
   bool playSdFile(const String& path, int32_t seconds = -1);
   SdLibrary& sdLibrary() { return sdLibrary_; }
@@ -125,6 +130,9 @@ class RadioController {
   static bool selectStationAction(void* context, size_t index);
   static void prepareSelectorAction(void* context);
   static bool sdModeAction(void* context);
+  static bool dlnaModeAction(void* context);
+  static uint8_t sourceModeAction(void* context);
+  static bool selectSourceAction(void* context, uint8_t source);
   static void toggleSourceAction(void* context);
   static String selectorPathAction(void* context);
   static void openPresetsAction(void* context);
@@ -139,6 +147,12 @@ class RadioController {
   bool startSdFile(const String& path, int32_t seconds, bool userSelection);
   void loadSdSelector(const String& path, size_t offset = 0);
   bool selectSdItem(size_t index);
+  void syncDlnaSelector();
+  void resetDlnaSelector();
+  size_t dlnaSelectorCount() const;
+  String dlnaSelectorName(size_t index);
+  bool selectDlnaItem(size_t index);
+  bool browseDlnaSelector(const DlnaService::Location& location, bool back);
   bool stepTrack(int delta);
   void cycleWeatherMode();
   void resetStreamProgressWatchdog(uint32_t now);
@@ -157,6 +171,13 @@ class RadioController {
   PlaylistService playlist_;
   AudioEngine audio_;
   SdLibrary sdLibrary_;
+  DlnaService dlna_;
+  bool dlnaMode_{false};
+  DlnaService::State dlnaSelectorState_;
+  SoapVector<DlnaService::Location> dlnaSelectorHistory_;
+  DlnaService::Location dlnaSelectorPrevious_;
+  uint32_t dlnaSelectorSubmittedRevision_{0};
+  bool dlnaSelectorPending_{false}, dlnaSelectorBack_{false}, dlnaSelectorHasPrevious_{false};
   bool sdMode_{false};
   String sdPath_;
   int32_t sdResumeSeconds_{-1};
