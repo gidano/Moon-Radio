@@ -255,9 +255,7 @@ void NowPlayingScreen::create(FontManager& fonts,
   lv_obj_add_event_cb(appTouchArea_, clockAreaEvent, LV_EVENT_CLICKED, this);
   lv_obj_move_foreground(appTouchArea_);
 
-  // Compact source switch in the unused gap between the centered title and
-  // the volume control. The icon shows the destination rather than the
-  // current source: SD while listening to radio, audio while using SD.
+  // Audio source picker: the same icon always opens Radio / SD / DLNA.
 #if TOUCH_ENABLED
   sourceButton_ = lv_button_create(top);
   lv_obj_set_pos(sourceButton_, 332, 4);
@@ -1032,13 +1030,13 @@ void NowPlayingScreen::updateWifiHeader(const String& wifiText) {
 
 void NowPlayingScreen::updateSourceButton() {
   if (!sourceButton_ || !sourceButtonIcon_) return;
-  const bool sd = actions_.sdMode && actions_.sdMode(actions_.context);
-  if (sourceButtonInitialized_ && sd == sourceButtonSdMode_) return;
+  const uint8_t mode = actions_.sourceMode ? actions_.sourceMode(actions_.context) : 0;
+  if (sourceButtonInitialized_ && mode == sourceButtonMode_) return;
 
   sourceButtonInitialized_ = true;
-  sourceButtonSdMode_ = sd;
-  const uint32_t color = sd ? 0x7DD3FC : 0x86EFAC;
-  lv_label_set_text(sourceButtonIcon_, sd ? LV_SYMBOL_AUDIO : LV_SYMBOL_SD_CARD);
+  sourceButtonMode_ = mode;
+  const uint32_t color = mode == 2 ? 0xC4B5FD : mode == 1 ? 0x7DD3FC : 0x86EFAC;
+  lv_label_set_text(sourceButtonIcon_, LV_SYMBOL_AUDIO);
   lv_obj_set_style_text_color(sourceButtonIcon_, lv_color_hex(color), 0);
   lv_obj_set_style_border_color(sourceButton_, lv_color_hex(color), 0);
   lv_obj_set_style_border_opa(sourceButton_, LV_OPA_70, 0);

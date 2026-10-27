@@ -31,6 +31,9 @@ struct NowPlayingActions {
   void (*diagnosticsVisibleChanged)(void*, bool){nullptr};
   void (*prepareSelector)(void*){nullptr};
   bool (*sdMode)(void*){nullptr};
+  bool (*dlnaMode)(void*){nullptr};
+  uint8_t (*sourceMode)(void*){nullptr};
+  bool (*selectSource)(void*, uint8_t){nullptr};
   void (*toggleSource)(void*){nullptr};
   String (*selectorPath)(void*){nullptr};
 };
@@ -159,7 +162,7 @@ class NowPlayingScreen {
   lv_image_dsc_t moonDescriptor_{};
   bool diagnosticsVisible_{false};
   bool sourceButtonInitialized_{false};
-  bool sourceButtonSdMode_{false};
+  uint8_t sourceButtonMode_{255};
   bool sliderSyncing_{false};
   bool wifiDetailsVisible_{false};
   bool bufferBarVisible_{true};
