@@ -48,6 +48,7 @@ class DisplayManager {
   void setDiagnosticsVisible(bool visible);
   bool diagnosticsVisible() const;
   void openStationSelector();
+  void openSourceMenu();
   bool moveStationSelector(int8_t delta);
   bool stationSelectorActive() const;
   bool confirmStationSelector();
@@ -75,6 +76,9 @@ class DisplayManager {
   static void stationArcAnimExec(void* var, int32_t value);
   static void closeSelectorEvent(lv_event_t* event);
   static void confirmSelectorEvent(lv_event_t* event);
+  static void sourceChoiceEvent(lv_event_t* event);
+  static void closeSourceMenuEvent(lv_event_t* event);
+  void closeSourceMenu();
   static void presetModeEvent(lv_event_t* event);
   static void presetSlotEvent(lv_event_t* event);
   static void presetBankEvent(lv_event_t* event);
@@ -176,6 +180,9 @@ class DisplayManager {
   uint32_t selectorSelectAt_{0};
   uint8_t selectorCountdown_{0};
   bool selectorActive_{false};
+  lv_obj_t* sourceOverlay_{nullptr};
+  lv_obj_t* sourceStatusLabel_{nullptr};
+  int8_t pendingSource_{-1};
   bool selectorConstructing_{false};
   lv_obj_t* presetOverlay_{nullptr};
   lv_obj_t* presetStatusLabel_{nullptr};

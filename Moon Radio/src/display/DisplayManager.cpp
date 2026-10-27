@@ -216,6 +216,15 @@ void DisplayManager::loop() {
   }
   updateStationSelector();
   updatePresets();
+  if (pendingSource_ >= 0) {
+    const uint8_t source = pendingSource_;
+    pendingSource_ = -1;
+    closeSourceMenu();
+    if (actions_.selectSource && !actions_.selectSource(actions_.context, source)) {
+      openSourceMenu();
+      if (sourceStatusLabel_) lv_label_set_text(sourceStatusLabel_, Language::text("A forrás nem érhető el"));
+    }
+  }
   delay(1);
 }
 
@@ -485,7 +494,7 @@ void DisplayManager::update(const AudioSnapshot& audio,
   }
 
 void DisplayManager::updateVu(const AudioLevels& levels) {
-  if (screenMode_ == ScreenMode::Normal && !selectorActive_ && !presetActive_) {
+  if (screenMode_ == ScreenMode::Normal && !selectorActive_ && !presetActive_ && !sourceOverlay_) {
     screen_.updateVu(levels);
   }
 }
@@ -548,8 +557,81 @@ void DisplayManager::setDiagnosticsVisible(bool visible) {
 bool DisplayManager::diagnosticsVisible() const { return diagnosticsVisible_; }
 
 void DisplayManager::openStationSelector() {
+  closeSourceMenu();
   if (presetActive_) hidePresets();
   openSelectorPending_ = true;
+}
+
+void DisplayManager::closeSourceMenu() {
+  if (sourceOverlay_) lv_obj_delete(sourceOverlay_);
+  sourceOverlay_ = sourceStatusLabel_ = nullptr;
+}
+
+void DisplayManager::openSourceMenu() {
+  if (screenMode_ != ScreenMode::Normal || sourceOverlay_) return;
+  hideStationSelector(); hidePresets(); openSelectorPending_ = false;
+  sourceOverlay_ = lv_obj_create(lv_screen_active());
+  lv_obj_set_size(sourceOverlay_, kWidth, kHeight);
+  lv_obj_set_pos(sourceOverlay_, 0, 0);
+  lv_obj_set_style_bg_color(sourceOverlay_, lv_color_hex(0x020617), 0);
+  lv_obj_set_style_bg_opa(sourceOverlay_, LV_OPA_70, 0);
+  lv_obj_set_style_border_width(sourceOverlay_, 0, 0);
+  lv_obj_set_style_radius(sourceOverlay_, 0, 0);
+  lv_obj_set_style_pad_all(sourceOverlay_, 0, 0);
+  lv_obj_clear_flag(sourceOverlay_, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_event_cb(sourceOverlay_, closeSourceMenuEvent, LV_EVENT_CLICKED, this);
+  auto* card = lv_obj_create(sourceOverlay_);
+  lv_obj_set_size(card, 320, 280); lv_obj_center(card);
+  lv_obj_set_style_bg_color(card, lv_color_hex(0x111827), 0);
+  lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_color(card, lv_color_hex(0x335466), 0);
+  lv_obj_set_style_radius(card, 16, 0); lv_obj_set_style_pad_all(card, 0, 0);
+  lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+  auto* title = lv_label_create(card);
+  lv_label_set_text(title, Language::text("Hangforrás"));
+  lv_obj_set_style_text_font(title, fonts_.large(), 0);
+  lv_obj_set_style_text_color(title, lv_color_hex(0x67E8F9), 0);
+  lv_obj_set_pos(title, 18, 13);
+  auto* close = lv_button_create(card);
+  lv_obj_set_size(close, 40, 40); lv_obj_set_pos(close, 269, 5);
+  lv_obj_set_style_bg_opa(close, LV_OPA_TRANSP, 0);
+  lv_obj_add_event_cb(close, closeSourceMenuEvent, LV_EVENT_CLICKED, this);
+  auto* x = lv_label_create(close); lv_label_set_text(x, LV_SYMBOL_CLOSE);
+  lv_obj_set_style_text_font(x, fonts_.symbol(), 0); lv_obj_center(x);
+  const uint8_t active = actions_.sourceMode ? actions_.sourceMode(actions_.context) : 0;
+  const char* names[] = {Language::text("Rádió"), "SD", "DLNA"};
+  const char* icons[] = {LV_SYMBOL_AUDIO, LV_SYMBOL_SD_CARD, LV_SYMBOL_WIFI};
+  for (uint8_t i = 0; i < 3; ++i) {
+    auto* button = lv_button_create(card);
+    lv_obj_set_size(button, 284, 50); lv_obj_set_pos(button, 17, 55 + i * 58);
+    lv_obj_set_style_bg_color(button, lv_color_hex(i == active ? 0x164E63 : 0x1E293B), 0);
+    lv_obj_set_style_border_width(button, i == active ? 2 : 1, 0);
+    lv_obj_set_style_border_color(button, lv_color_hex(i == active ? 0x22D3EE : 0x334155), 0);
+    lv_obj_set_style_radius(button, 10, 0);
+    lv_obj_set_user_data(button, reinterpret_cast<void*>(static_cast<uintptr_t>(i + 1)));
+    lv_obj_add_event_cb(button, sourceChoiceEvent, LV_EVENT_CLICKED, this);
+    auto* icon = lv_label_create(button); lv_label_set_text(icon, icons[i]);
+    lv_obj_set_style_text_font(icon, fonts_.symbol(), 0); lv_obj_align(icon, LV_ALIGN_LEFT_MID, 0, 0);
+    auto* text = lv_label_create(button); lv_label_set_text(text, names[i]);
+    lv_obj_set_style_text_font(text, fonts_.regular(), 0); lv_obj_align(text, LV_ALIGN_LEFT_MID, 38, 0);
+    if (i == active) { auto* check = lv_label_create(button); lv_label_set_text(check, LV_SYMBOL_OK); lv_obj_set_style_text_font(check, fonts_.symbol(), 0); lv_obj_align(check, LV_ALIGN_RIGHT_MID, 0, 0); }
+  }
+  sourceStatusLabel_ = lv_label_create(card);
+  lv_obj_set_style_text_font(sourceStatusLabel_, fonts_.regular(), 0);
+  lv_obj_set_style_text_color(sourceStatusLabel_, lv_color_hex(0xFCA5A5), 0);
+  lv_obj_set_width(sourceStatusLabel_, 284); lv_obj_set_pos(sourceStatusLabel_, 17, 239);
+  lv_label_set_long_mode(sourceStatusLabel_, LV_LABEL_LONG_DOT);
+  lv_label_set_text(sourceStatusLabel_, "");
+}
+
+void DisplayManager::sourceChoiceEvent(lv_event_t* event) {
+  auto* manager = static_cast<DisplayManager*>(lv_event_get_user_data(event));
+  if (!manager) return;
+  manager->pendingSource_ = static_cast<int8_t>(reinterpret_cast<uintptr_t>(lv_obj_get_user_data(lv_event_get_target_obj(event))) - 1);
+}
+void DisplayManager::closeSourceMenuEvent(lv_event_t* event) {
+  auto* manager = static_cast<DisplayManager*>(lv_event_get_user_data(event));
+  if (manager) manager->closeSourceMenu();
 }
 
 bool DisplayManager::moveStationSelector(int8_t delta) {
@@ -588,9 +670,10 @@ bool DisplayManager::moveStationSelector(int8_t delta) {
   selectorArcNextDurationMs_ = 220;
   animateStationSelectorArc(selected, animationDuration);
   selectorPendingIndex_ = selected;
-  selectorSelectAt_ = millis() + kStationSelectDelayMs;
+  const bool dlna = actions_.dlnaMode && actions_.dlnaMode(actions_.context);
+  selectorSelectAt_ = dlna ? 0 : millis() + kStationSelectDelayMs;
   selectorCountdown_ = 0;
-  if (selectorStatusLabel_) {
+  if (selectorStatusLabel_ && !dlna) {
     lv_label_set_text(selectorStatusLabel_, Language::text("Indítás 3 mp múlva"));
   }
   return true;
@@ -619,6 +702,7 @@ void DisplayManager::confirmSelectorEvent(lv_event_t* event) {
 
 
 void DisplayManager::showMaintenance() {
+  closeSourceMenu(); pendingSource_ = -1;
   resetStationSelector();
   resetPresets();
   screenMode_ = ScreenMode::Maintenance;
@@ -718,7 +802,7 @@ void DisplayManager::showWifiSetup(const String& address) {
 }
 
 bool DisplayManager::visualizerActive() const {
-  return !selectorActive_ && !presetActive_ && screen_.visualizerActive();
+  return !selectorActive_ && !presetActive_ && !sourceOverlay_ && screen_.visualizerActive();
 }
 
 void DisplayManager::setBrightness(uint8_t value) {
@@ -800,7 +884,7 @@ void DisplayManager::readTouch(lv_indev_t*, lv_indev_data_t* data) {
         instance_->moveStationSelector(static_cast<int8_t>(-steps));
         instance_->lastSelectorTouchY_ += steps * kStationScrollStep;
       }
-    } else if (!instance_->selectorActive_ && !instance_->presetActive_) {
+    } else if (!instance_->selectorActive_ && !instance_->presetActive_ && !instance_->sourceOverlay_) {
       if (!instance_->volumeSwipe_ && !instance_->verticalSwipe_ &&
           abs(totalY) >= kVerticalSwipeThreshold &&
           abs(totalY) > abs(totalX)) {
@@ -829,7 +913,7 @@ void DisplayManager::readTouch(lv_indev_t*, lv_indev_data_t* data) {
     data->point.y = y;
   } else {
     if (instance_->touchActive_ && instance_->verticalSwipe_ &&
-        !instance_->selectorActive_ && !instance_->presetActive_) {
+        !instance_->selectorActive_ && !instance_->presetActive_ && !instance_->sourceOverlay_) {
       instance_->openSelectorPending_ = true;
     }
     instance_->touchActive_ = false;
@@ -847,6 +931,7 @@ void DisplayManager::showStationSelector() {
 
   if (actions_.prepareSelector) actions_.prepareSelector(actions_.context);
   const bool sd = actions_.sdMode && actions_.sdMode(actions_.context);
+  const bool dlna = actions_.dlnaMode && actions_.dlnaMode(actions_.context);
   const size_t count = actions_.stationCount(actions_.context);
   if (count == 0) return;
 
@@ -875,7 +960,7 @@ void DisplayManager::showStationSelector() {
   lv_obj_clear_flag(header, LV_OBJ_FLAG_SCROLLABLE);
 
   lv_obj_t* title = lv_label_create(header);
-  lv_label_set_text(title, sd ? "SD" : Language::text("ÁLLOMÁSOK"));
+  lv_label_set_text(title, dlna ? "DLNA" : sd ? "SD" : Language::text("ÁLLOMÁSOK"));
   lv_obj_set_pos(title, 16, 12);
   lv_obj_set_style_text_font(title, fonts_.large(), 0);
   lv_obj_set_style_text_color(title, lv_color_hex(0xF1F5F9), 0);
@@ -889,7 +974,7 @@ void DisplayManager::showStationSelector() {
   lv_obj_set_style_text_align(selectorStatusLabel_, LV_TEXT_ALIGN_RIGHT, 0);
   lv_label_set_long_mode(selectorStatusLabel_, LV_LABEL_LONG_DOT);
 
-  if (sd) {
+  if (sd || dlna) {
     if (actions_.selectorPath) {
       const String path = actions_.selectorPath(actions_.context);
       lv_label_set_text(selectorStatusLabel_, path.c_str());
@@ -1303,7 +1388,8 @@ void DisplayManager::stationSelectorEvent(lv_event_t* event) {
     manager->selectorPendingIndex_ = static_cast<int32_t>(
         lv_roller_get_selected(manager->selectorRoller_));
     manager->animateStationSelectorArc(manager->selectorPendingIndex_);
-    manager->selectorSelectAt_ = millis() + kStationSelectDelayMs;
+    const bool dlna = manager->actions_.dlnaMode && manager->actions_.dlnaMode(manager->actions_.context);
+    manager->selectorSelectAt_ = dlna ? 0 : millis() + kStationSelectDelayMs;
     manager->selectorCountdown_ = 0;
   }
 }
@@ -1732,6 +1818,8 @@ void DisplayManager::calibrateTouch() {
 }
 
 void DisplayManager::languageChanged() {
+  closeSourceMenu();
   hideStationSelector();
   hidePresets();
 }
+
