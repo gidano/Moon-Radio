@@ -9,7 +9,7 @@
 </div>
 
 <p align="center">
-  <img src="https://github.com/gidano/Moon-Radio/blob/main/Photos/Moon_Radio.jpg" width="480"><img src="https://github.com/gidano/Moon-Radio/blob/main/Photos/Moon_Radio.2.jpg" width="480">
+  <img src="https://github.com/gidano/Moon-Radio/blob/main/Photos/Moon_Radio.jpg" width="960"><img src="https://github.com/gidano/Moon-Radio/blob/main/Photos/Moon_Radio.2.jpg" width="960">
 </p>
 
 # Moon Radio
