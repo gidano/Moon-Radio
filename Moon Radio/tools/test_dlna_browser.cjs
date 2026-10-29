@@ -22,6 +22,11 @@ const {chromium} = require(process.env.PLAYWRIGHT_PATH || 'playwright');
     else if (req.url === '/api/source') { audio.source = args.source; if(args.source==='radio') Object.assign(audio,{stationName:'Moon Radio',title:''}); result = {ok:true}; }
     else if (req.url === '/api/status') result = audio;
     else if (req.url === '/api/dlna') result = state;
+    else if (req.url === '/api/dlna/connect') {
+      state = args.port === '65534' ? {...state,error:'connect'} :
+        {busy:false,revision:state.revision+1,servers:false,server:0,object:'0',heading:'Manual NAS',offset:0,more:false,error:'',items:[{name:'Zene / Albumok',id:'music',directory:true}]};
+      audio.source='dlna';result={ok:true};
+    }
     else if (req.url === '/api/dlna/scan') {
       state = {busy:false,revision:1,servers:true,items:[{name:'Windows Media Player · PC'},{name:'VAULT - Luna Veil'}],error:''}; audio.source = 'dlna'; result = {ok:true};
     } else if (req.url === '/api/dlna/servers') {
@@ -49,6 +54,21 @@ const {chromium} = require(process.env.PLAYWRIGHT_PATH || 'playwright');
     const page = await browser.newPage({viewport:{width:390,height:844}});
     page.on('pageerror',e => errors.push(e.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/dlna`);
+    const manualBox=await page.locator('#manualForm').boundingBox();
+    const introBox=await page.locator('[data-t="intro"]').boundingBox();
+    assert(manualBox.y+manualBox.height<=introBox.y,'manual fields must precede the intro');
+    await page.locator('#manualIp').fill('999.1.2.3');
+    await page.locator('#manualConnect').click();
+    assert(!requests.some(r=>r.url==='/api/dlna/connect'));
+    await page.locator('#manualIp').fill('192.168.31.103');
+    await page.locator('#manualPort').fill('8000');
+    await page.locator('#manualConnect').click();
+    await page.getByRole('heading',{name:'Manual NAS',exact:true}).waitFor();
+    assert.deepEqual(requests.find(r=>r.url==='/api/dlna/connect').args,{ip:'192.168.31.103',port:'8000'});
+    await page.locator('#manualPort').fill('65534');
+    await page.locator('#manualConnect').click();
+    await page.getByText(/Ezen a címen nem sikerült/).waitFor();
+    assert.equal(await page.locator('#items button').count(),1,'failure must retain the previous directory');
     await page.getByRole('button',{name:'Szerverek keresése'}).click();
     await page.getByRole('button',{name:'Windows Media Player · PC'}).click();
     await page.getByRole('button',{name:'Zene / Albumok'}).click();

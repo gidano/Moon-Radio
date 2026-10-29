@@ -32,7 +32,7 @@ async function radio(language = 'hu') {
     if (url === '/api/language') return {ok:true,json:async () => ({language})};
     if (url === '/api/status') return {ok:true,json:async () => structuredClone(status)};
     if (url === '/api/dlna') return {ok:true,json:async () => structuredClone(state)};
-    if (url === '/api/dlna/scan' || url === '/api/dlna/browse') state.busy = true;
+    if (url === '/api/dlna/scan' || url === '/api/dlna/browse' || url === '/api/dlna/connect') state.busy = true;
     if (url === '/api/source') status.source = args.source;
     return {ok:true,json:async () => ({ok:true})};
   };
@@ -44,6 +44,7 @@ async function radio(language = 'hu') {
     setStatus:s => {status = s;},
     refresh:async () => {tick(); await settle();},
     click:async id => {await get(id).click(); await settle();},
+    connect:async (ip,port) => {get('manualIp').value=ip;get('manualPort').value=port;await get('manualForm').onsubmit({preventDefault(){}});await settle();},
     clickItem:async i => {get('items').children[i].children[0].click(); await settle();}
   };
 }
@@ -103,5 +104,23 @@ test('unsupported resources cannot be played and folder failures remain visible'
   assert.equal(r.get('items').children[0].children[0].disabled,true);
   r.setState({...page(1,0,false,[folder]),error:'browse'}); await r.refresh();
   assert.match(r.get('message').textContent,/previous list/);
+  assert.equal(r.get('items').children.length,1);
+});
+
+test('manual connection validates address and port, disables controls while busy, and retains failed listings', async () => {
+  const r = await radio('en');
+  for (const [ip,port] of [['256.1.2.3','8000'],['192.168.1.2','0'],['192.168.1.2','65536'],['radio.local','8000'],['224.1.2.3','8000']]) {
+    await r.connect(ip,port);
+    assert(!r.calls.some(c=>c.url==='/api/dlna/connect'));
+    assert.match(r.get('message').textContent,/valid IP/);
+  }
+  r.setState(page(3,0,false,[folder])); await r.refresh();
+  await r.connect(' 192.168.31.103 ','8000');
+  assert.deepEqual(r.calls.find(c=>c.url==='/api/dlna/connect').args,{ip:'192.168.31.103',port:'8000'});
+  assert.equal(r.get('manualConnect').disabled,true);
+  assert.equal(r.get('manualIp').disabled,true);
+  r.setState({...page(3,0,false,[folder]),error:'connect'}); await r.refresh();
+  assert.equal(r.get('manualConnect').disabled,false);
+  assert.match(r.get('message').textContent,/DLNA library/);
   assert.equal(r.get('items').children.length,1);
 });
