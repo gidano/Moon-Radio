@@ -164,6 +164,19 @@ void RadioWebServer::registerRoutes() {
     const bool ok = radio_.setDlnaMode() && radio_.dlna().scan();
     server_.send(ok ? 202 : 409, kJson, ok ? "{\"ok\":true}" : "{\"ok\":false}");
   });
+  server_.on("/api/dlna/connect", HTTP_POST, [this]() {
+    const String ip = argument("ip"), portText = argument("port");
+    IPAddress address;
+    bool valid = ip.length() <= 15 && address.fromString(ip) && ip == address.toString() &&
+                 address[0] > 0 && address[0] < 224 && portText.length() > 0 && portText.length() <= 5;
+    for (char c : portText) if (c < '0' || c > '9') valid = false;
+    const long port = portText.toInt();
+    if (!valid || port < 1 || port > 65535) {
+      server_.send(400, kJson, "{\"ok\":false,\"error\":\"address\"}"); return;
+    }
+    const bool ok = radio_.setDlnaMode() && radio_.dlna().connect(ip, static_cast<uint16_t>(port));
+    server_.send(ok ? 202 : 409, kJson, ok ? "{\"ok\":true}" : "{\"ok\":false}");
+  });
   server_.on("/api/dlna/servers", HTTP_POST, [this]() {
     const bool ok = !radio_.fsMaintenance() && radio_.dlnaMode() && radio_.dlna().showServers();
     server_.send(ok ? 200 : 409, kJson, ok ? "{\"ok\":true}" : "{\"ok\":false}");
@@ -220,6 +233,24 @@ void RadioWebServer::registerRoutes() {
     server_.send(ok ? 200 : 400, kJson, ok ? "{\"ok\":true}" : "{\"ok\":false}");
   });
   server_.on("/api/status", HTTP_GET, [this]() { sendStatus(); });
+  server_.on("/api/frame", HTTP_GET, [this]() {
+    constexpr size_t kRowBytes = static_cast<size_t>(DisplayManager::kWidth) * 2;
+    uint8_t row[kRowBytes];
+    if (!radio_.copyDisplayFrameRow(0, row, sizeof(row))) {
+      server_.send(503, "text/plain; charset=utf-8", "Frame not ready");
+      return;
+    }
+    const size_t total = kRowBytes * DisplayManager::kHeight;
+    server_.setContentLength(total);
+    server_.sendHeader("Cache-Control", "no-store");
+    server_.sendHeader("X-W", String(DisplayManager::kWidth));
+    server_.sendHeader("X-H", String(DisplayManager::kHeight));
+    server_.send(200, "application/octet-stream", "");
+    for (uint16_t y = 0; y < DisplayManager::kHeight; ++y) {
+      if (!radio_.copyDisplayFrameRow(y, row, sizeof(row))) return;
+      server_.sendContent(reinterpret_cast<const char*>(row), kRowBytes);
+    }
+  });
   server_.on("/api/language", HTTP_GET, [this]() {
     server_.sendHeader("Cache-Control", "no-store");
     server_.send(200, kJson, String("{\"language\":\"") + radio_.uiLanguage() + "\"}");
