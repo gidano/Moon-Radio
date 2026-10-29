@@ -6,6 +6,13 @@
     DE: {home:'Zurück zum Radio',title:'Netzwerkmusik',intro:'Musikbibliothek auf PC oder NAS durchsuchen und abspielen.',scan:'Server suchen',radio:'Radioquelle',up:'Zurück',previousPage:'Vorherige Seite',nextPage:'Nächste Seite',previousTrack:'Vorheriger Titel',nextTrack:'Nächster Titel',pause:'Pause / Wiedergabe',queueNote:'Die Titel der beim Start geöffneten Seite werden nacheinander gespielt. Andere Ordner ändern diese Liste nicht.',memory:'Speicher',busy:'Server suchen oder Ordner laden…',empty:'Keine Einträge.',no_servers:'Kein Medienserver gefunden. Medienfreigabe am PC prüfen oder erneut suchen.',browse:'Ordner konnte nicht geladen werden. Die vorherige Liste bleibt erhalten.',scanError:'Suche fehlgeschlagen. Erneut versuchen.',memoryError:'Nicht genug Speicher oder Serverantwort zu groß.',requestError:'Aktion nicht möglich. Laden abwarten oder Verbindung und freien Speicher prüfen.',offline:'Radio nicht erreichbar.',unsupported:'Audioformat nicht unterstützt',serverList:'Medienserver',used:'DLNA-PSRAM belegt',peak:'DLNA-PSRAM Höchstwert',budget:'DLNA-Speichergrenze',internal:'Interner RAM frei',largest:'Größter freier interner Block',psram:'PSRAM frei',ready:'Medienserver oder Titel auswählen.'},
     PL: {home:'Powrót do radia',title:'Muzyka sieciowa',intro:'Przeglądaj i odtwarzaj bibliotekę multimediów na komputerze lub NAS.',scan:'Szukaj serwerów',radio:'Źródło radiowe',up:'Wstecz',previousPage:'Poprzednia strona',nextPage:'Następna strona',previousTrack:'Poprzedni utwór',nextTrack:'Następny utwór',pause:'Pauza / odtwarzanie',queueNote:'Kolejne utwory pochodzą ze strony otwartej przy rozpoczęciu odtwarzania. Przeglądanie innych folderów nie zmienia kolejki.',memory:'Pamięć',busy:'Wyszukiwanie serwerów lub wczytywanie folderu…',empty:'Brak elementów.',no_servers:'Nie znaleziono serwera. Sprawdź udostępnianie multimediów na komputerze lub ponów wyszukiwanie.',browse:'Nie można wczytać folderu. Poprzednia lista została zachowana.',scanError:'Wyszukiwanie nie powiodło się. Spróbuj ponownie.',memoryError:'Za mało pamięci lub odpowiedź serwera jest zbyt duża.',requestError:'Nie można rozpocząć operacji. Poczekaj na wczytanie lub sprawdź połączenie i wolną pamięć.',offline:'Radio jest niedostępne.',unsupported:'Nieobsługiwany format audio',serverList:'Serwery multimediów',used:'Użycie PSRAM przez DLNA',peak:'Szczyt użycia PSRAM przez DLNA',budget:'Limit pamięci DLNA',internal:'Wolny wewnętrzny RAM',largest:'Największy wolny blok wewnętrzny',psram:'Wolny PSRAM',ready:'Wybierz serwer lub utwór.'}
   };
+  const manualWords = {
+    HU:{manualTitle:'Kapcsolódás cím alapján (opcionális)',ipLabel:'Szerver IP-címe',portLabel:'Port',connectButton:'Kapcsolódás',addressError:'Adj meg érvényes IP-címet és 1–65535 közötti portot.',connectError:'Ezen a címen nem sikerült DLNA-médiatárat megnyitni. Ellenőrizd a címet, portot és a szerver működését.'},
+    EN:{manualTitle:'Connect by address (optional)',ipLabel:'Server IP address',portLabel:'Port',connectButton:'Connect',addressError:'Enter a valid IP address and a port from 1 to 65535.',connectError:'Could not open a DLNA library at this address. Check the address, port and media server.'},
+    DE:{manualTitle:'Über Adresse verbinden (optional)',ipLabel:'IP-Adresse des Servers',portLabel:'Port',connectButton:'Verbinden',addressError:'Eine gültige IP-Adresse und einen Port von 1 bis 65535 eingeben.',connectError:'Unter dieser Adresse konnte keine DLNA-Mediathek geöffnet werden. Adresse, Port und Server prüfen.'},
+    PL:{manualTitle:'Połącz przez adres (opcjonalnie)',ipLabel:'Adres IP serwera',portLabel:'Port',connectButton:'Połącz',addressError:'Podaj poprawny adres IP i port od 1 do 65535.',connectError:'Nie można otworzyć biblioteki DLNA pod tym adresem. Sprawdź adres, port i serwer.'}
+  };
+  for (const language of Object.keys(manualWords)) Object.assign(words[language], manualWords[language]);
   window.mountDlnaBrowser = (root, embedded = false) => {
   let w = words.HU, state = null, path = [], pending = null, submitting = false, refreshing = false, rendered = '', notice = '';
   let disposed = false, timer = null;
@@ -14,12 +21,13 @@
   const message = () => {
     const error = state?.error;
     el('message').textContent = notice || (submitting || state?.busy ? w.busy : error ?
-      ({memory:w.memoryError,scan:w.scanError,browse:w.browse,no_servers:w.no_servers}[error] || w.requestError) : state?.items?.length ? w.ready : w.empty);
+      ({memory:w.memoryError,scan:w.scanError,browse:w.browse,connect:w.connectError,no_servers:w.no_servers}[error] || w.requestError) : state?.items?.length ? w.ready : w.empty);
   };
   function render() {
     if (disposed) return;
     const busy = submitting || !!state?.busy;
     el('scan').disabled = busy;
+    for (const id of ['manualIp','manualPort','manualConnect']) el(id).disabled = busy;
     el('up').disabled = busy || !state || state.servers;
     el('previousPage').disabled = busy || !state || state.servers || !state.offset;
     el('nextPage').disabled = busy || !state?.more;
@@ -95,6 +103,17 @@
     finally { refreshing = false; render(); }
   }
   el('scan').onclick = async () => { pending = null; await post('/api/dlna/scan'); };
+  el('manualForm').onsubmit = async event => {
+    event.preventDefault();
+    const ip = el('manualIp').value.trim(), port = el('manualPort').value.trim();
+    const parts = ip.split('.');
+    if (parts.length !== 4 || parts.some(n => !/^(0|[1-9]\d{0,2})$/.test(n) || Number(n) > 255) ||
+        Number(parts[0]) === 0 || Number(parts[0]) >= 224 || !/^\d{1,5}$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
+      notice = w.addressError; message(); return;
+    }
+    pending = {revision:state?.revision,path:[]};
+    if (!await post('/api/dlna/connect', {ip,port})) pending = null;
+  };
   el('radio').onclick = () => post('/api/source', {source:'radio'});
   el('up').onclick = () => {
     if (path.length <= 1) { pending = null; post('/api/dlna/servers'); return; }

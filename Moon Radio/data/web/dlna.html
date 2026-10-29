@@ -16,6 +16,14 @@
 <section id="dlna-browser" class="dlna-browser">
   <a href="/" data-t="home" data-dlna-standalone>Vissza a rádióhoz</a>
   <h1 data-t="title" data-dlna-standalone>Hálózati zene</h1>
+  <form id="manualForm" class="manual-server">
+    <p data-t="manualTitle">Kapcsolódás cím alapján (opcionális)</p>
+    <div class="manual-fields">
+      <label><span data-t="ipLabel">Szerver IP-címe</span><input id="manualIp" type="text" inputmode="decimal" placeholder="192.168.31.103" maxlength="15" required autocomplete="off"></label>
+      <label><span data-t="portLabel">Port</span><input id="manualPort" type="number" inputmode="numeric" min="1" max="65535" value="8000" required></label>
+      <button id="manualConnect" type="submit" data-t="connectButton">Kapcsolódás</button>
+    </div>
+  </form>
   <p data-t="intro" data-dlna-standalone>PC vagy NAS megosztott zenetárának böngészése és lejátszása.</p>
   <div class="toolbar"><button id="scan" data-t="scan">Szerverek keresése</button><button id="radio" data-t="radio" data-dlna-standalone>Rádióforrás</button></div>
   <p id="message" role="status" aria-live="polite"></p>

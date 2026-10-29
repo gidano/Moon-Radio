@@ -14,6 +14,12 @@
 .dlna-browser #message{min-height:1.6em;color:#bdd7dd}
 .dlna-browser #now{padding:14px;background:#1e1e1e;border-radius:10px;overflow-wrap:anywhere}
 .dlna-browser #page{align-self:center}
+.dlna-browser .manual-server{margin:22px 0;padding:14px;border:1px solid #48616a;border-radius:10px}
+.dlna-browser .manual-server p{margin:0 0 12px;color:#bdd7dd}
+.dlna-browser .manual-fields{display:grid;grid-template-columns:minmax(0,1fr)90px auto;gap:10px;align-items:end}
+.dlna-browser .manual-fields label{min-width:0;display:grid;gap:6px;font-size:.9em}
+.dlna-browser .manual-fields input{width:100%;min-width:0;box-sizing:border-box;height:44px;padding:8px 10px;border:1px solid #48616a;border-radius:8px;background:#1e1e1e;color:#fff;font:inherit}
+@media(max-width:480px){.dlna-browser .manual-fields{grid-template-columns:minmax(0,1fr)80px}.dlna-browser #manualConnect{grid-column:1/-1}}
 .dlna-browser details{margin-top:28px;color:#a9c0c7}
 .dlna-browser dl{display:grid;grid-template-columns:1fr auto;gap:8px}
 .dlna-browser dt,.dlna-browser dd{margin:0}
