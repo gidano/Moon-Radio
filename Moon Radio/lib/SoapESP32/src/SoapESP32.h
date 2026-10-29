@@ -228,6 +228,9 @@ class SoapESP32
     void          clearServerList(void);
     bool          addServer(IPAddress ip, uint16_t port, const char *controlURL, const char *name = "My Media Server");
     unsigned int  seekServer(unsigned int scanDuration = SSDP_SCAN_DURATION);
+    // Resolve a single HTTP endpoint using directed SSDP and common descriptor paths.
+    // Returns a stable server index; existing entries are changed only after validation.
+    int           connectServer(IPAddress ip, uint16_t port);
     unsigned int  getServerCount(void);
     bool          getServerInfo(unsigned int srv, soapServer_t *serverInfo);
     bool          getServerCapabilities(const unsigned int srv, eCapabilityType capability, soapServerCapVect_t *result);
@@ -278,6 +281,7 @@ class SoapESP32
                   const char *searchCriteria, const char *sortCriteria, const uint32_t startingIndex, const uint16_t maxCount);                        
     bool soapPostCapabilities(const IPAddress ip, const uint16_t port, const char *uri, eCapabilityType capability);
     bool soapReadHttpHeader(uint64_t *contentLength, bool *chunked = NULL);
+    bool soapProbeServer(IPAddress ip, uint16_t port, const char *location, soapServer_t& out);
     int  soapReadXML(bool chunked = false, bool replace = false);
     bool soapScanAttribute(const SoapString *attributes, SoapString *result, const char *searchFor);
     bool soapScanContainer(const SoapString *parentId, const SoapString *attributes, const SoapString *container, soapObjectVect_t *browseResult);

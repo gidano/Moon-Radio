@@ -664,6 +664,130 @@ end:
 }
 
 //
+// Resolve the ContentDirectory service without requiring multicast discovery.
+bool SoapESP32::soapProbeServer(IPAddress ip, uint16_t port, const char *location, soapServer_t& out)
+{
+  if (SoapMemory::failed.load() || (m_deadline && (int32_t)(millis() - m_deadline) >= 0)) return false;
+  m_client->stop();
+  if (!soapGet(ip, port, location)) return false;
+  uint64_t length = 0;
+  bool chunked = false, named = false, service = false, ok = false;
+  if (soapReadHttpHeader(&length, &chunked) && (chunked || (length && length <= 256 * 1024))) {
+    MiniXPath parser, alternate;
+    parser.setPath(&xmlParserPaths[xpFriendlyName]);
+    alternate.setPath(&xmlParserPaths[xpFriendlyNameAlt]);
+    SoapString value;
+    out = {.ip=ip, .port=port, .location=location, .friendlyName="", .controlURL=""};
+    for (uint64_t read = 0; chunked || read < length; ++read) {
+      const int c = soapReadXML(chunked);
+      if (c < 0) break;
+      if (!(parser.getValue((char)c, &value) || alternate.getValue((char)c, &value))) continue;
+      if (!named) {
+        out.friendlyName = value.isEmpty() ? "DLNA" : value;
+        named = true;
+        parser.setPath(&xmlParserPaths[xpServiceType]);
+        alternate.setPath(&xmlParserPaths[xpServiceTypeAlt]);
+      } else if (!service) {
+        if (!strstr(value.c_str(), UPNP_URN_SCHEMA_CONTENT_DIRECTORY)) continue;
+        service = true;
+        parser.setPath(&xmlParserPaths[xpControlUrl]);
+        alternate.setPath(&xmlParserPaths[xpControlUrlAlt]);
+      } else {
+        // Absolute and root-relative control URLs are common. Resolve ordinary
+        // relative URLs against the descriptor directory, not its filename.
+        if (value.startsWith("http://")) {
+          char host[20]{}; unsigned endpointPort = 80; int consumed = 0;
+          if (sscanf(value.c_str(), "http://%19[0-9.]:%u/%n", host, &endpointPort, &consumed) != 2 || !consumed) {
+            endpointPort = 80; consumed = 0;
+            if (sscanf(value.c_str(), "http://%19[0-9.]/%n", host, &consumed) != 1 || !consumed) break;
+          }
+          IPAddress endpoint;
+          if (!endpoint.fromString(host) || !endpointPort || endpointPort > 65535) break;
+          out.ip = endpoint; out.port = endpointPort;
+          out.controlURL = value.substring(consumed);
+        } else if (value.startsWith("/")) out.controlURL = value.substring(1);
+        else {
+          const char* slash = strrchr(location, '/');
+          if (slash) out.controlURL = SoapString(location).substring(0, slash - location + 1);
+          out.controlURL += value;
+        }
+        ok = !out.controlURL.isEmpty() && out.controlURL.length() <= 512 && !SoapMemory::failed.load();
+        break;
+      }
+    }
+  }
+  m_client->stop();
+  return ok;
+}
+
+int SoapESP32::connectServer(IPAddress ip, uint16_t port)
+{
+  soapServer_t candidate;
+  // A previously discovered descriptor is the best hint, including opaque
+  // Windows/NAS paths. Re-read it so a changed service is not used blindly.
+  int existing = -1;
+  for (unsigned i = 0; i < m_server.size(); ++i) {
+    if (m_server[i].ip == ip && m_server[i].port == port) {
+      existing = i;
+      if (soapProbeServer(ip, port, m_server[i].location.c_str(), candidate)) {
+        m_server[i] = candidate; return i;
+      }
+      break;
+    }
+  }
+  if (existing < 0 && m_server.size() >= 8) return -1;
+  bool found = false;
+  // Directed SSDP works even when the router does not forward multicast.
+  // Bind an ephemeral local port; never disturb the automatic scan socket.
+  m_udp->stop();
+  if (m_udp->begin(0)) {
+    SoapString query(SSDP_M_SEARCH); query += SSDP_DEVICE_TYPE_MS; query += "\r\n\r\n";
+    query.replace("MX: 4", "MX: 1"); // directed probe waits longer than this advertised maximum
+    if (m_udp->beginPacket(ip, SSDP_MULTICAST_PORT)) {
+      m_udp->write((const uint8_t*)query.c_str(), query.length()); m_udp->endPacket();
+      const uint32_t started = millis();
+      while (millis() - started < 2500 && !SoapMemory::failed.load() &&
+             (!m_deadline || (int32_t)(millis() - m_deadline) < 0)) {
+        const int size = m_udp->parsePacket();
+        if (size > 0) {
+          if (size > 1536 || m_udp->remoteIP() != ip) { m_udp->clear(); delay(1); continue; }
+          char* packet = (char*)SoapMemory::allocate(size + 1);
+          if (!packet) break;
+          const int received = m_udp->read(packet, size); packet[received < 0 ? 0 : received] = 0;
+          const char* location = strcasestr(packet, "\nLOCATION:");
+          SoapString descriptor;
+          if (location) {
+            location += 10; while (*location == ' ' || *location == '\t') ++location;
+            char host[20]{}; unsigned advertisedPort = 80; int consumed = 0;
+            if (sscanf(location, "http://%19[0-9.]:%u/%n", host, &advertisedPort, &consumed) != 2 || !consumed) {
+              advertisedPort = 80; consumed = 0;
+              sscanf(location, "http://%19[0-9.]/%n", host, &consumed);
+            }
+            IPAddress advertised;
+            if (consumed && advertised.fromString(host) && advertised == ip && advertisedPort == port) {
+              for (const char* p = location + consumed; *p && *p != '\r' && *p != '\n' && descriptor.length() < 512; ++p) descriptor += *p;
+            }
+          }
+          SoapMemory::release(packet);
+          if (!descriptor.isEmpty() && soapProbeServer(ip, port, descriptor.c_str(), candidate)) { found = true; break; }
+        }
+        delay(1);
+      }
+    }
+  }
+  m_udp->stop();
+  // Some small servers expose HTTP but do not answer directed SSDP. Try a
+  // bounded set of common descriptor locations, including Simple UPnP.
+  if (!found) for (const char* location : {"", "upnp/desc.xml", "description.xml", "rootDesc.xml", "DeviceDescription.xml"}) {
+    if (soapProbeServer(ip, port, location, candidate)) { found = true; break; }
+    if (SoapMemory::failed.load() || (m_deadline && (int32_t)(millis() - m_deadline) >= 0)) break;
+  }
+  if (!found) return -1;
+  if (existing >= 0) { m_server[existing] = candidate; return existing; }
+  m_server.push_back(candidate);
+  return SoapMemory::failed.load() ? -1 : (int)m_server.size() - 1;
+}
+
 // add a server manually to server list 
 //
 bool SoapESP32::addServer(IPAddress ip, uint16_t port, const char *controlURL, const char *name)
