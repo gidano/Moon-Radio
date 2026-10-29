@@ -59,6 +59,7 @@ class MiniXPath {
     bool       treeFlag;       // indicates data on matchlevel or above when whole sub tree is requested
     uint16_t   matchCount;     // tag chars already matched with path string, set to 0 after scanning '<' or '>'
     uint8_t    matchLevel;     // current match level after scanning path tags (pathsize is maximum)
+    char       attributeQuote; // only the opening delimiter can close an XML attribute
 
     bool find(char charToParse, bool subTree);
     bool elementPathMatch();

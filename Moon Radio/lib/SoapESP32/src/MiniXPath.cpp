@@ -26,6 +26,7 @@ void MiniXPath::reset()
   tagLevel = 0;
   subLevel = 0;
   matchLevel = 0;
+  attributeQuote = 0;
 #ifdef MINIXPATH_DEBUG	
   Serial.printf("reset: tagLev=%d sub=%d subLev=%d paSize=%d paMatched=%d stat=%02d matchCnt=%d path=%s\n", 
                   tagLevel, sub, subLevel, pathSize, matchLevel, state, matchCount, pathSize == 0 ? "" : path[pathSize-1]);
@@ -181,12 +182,16 @@ bool MiniXPath::find(char charToParse, bool subTree)
         switch (state)
         {
           case XML_PARSER_ATTRIBUTES:
+            attributeQuote = charToParse;
             state = XML_PARSER_ATTRIBUTE_VALUE;
             position++;
             break;
           case XML_PARSER_ATTRIBUTE_VALUE:
-            state = XML_PARSER_ATTRIBUTES;
-            position++;
+            if (charToParse == attributeQuote) {
+              state = XML_PARSER_ATTRIBUTES;
+              attributeQuote = 0;
+              position++;
+            }
             break;
         }
         break;
