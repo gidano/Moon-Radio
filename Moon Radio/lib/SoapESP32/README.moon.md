@@ -8,6 +8,12 @@ MiniXPath.h/.cpp; SoapMemory.h is the Moon Radio allocation adapter.
 
 Local changes:
 
+- connectServer resolves a manually supplied IPv4/HTTP port through an existing
+  descriptor, directed SSDP, or a bounded set of common HTTP descriptor paths.
+  The ContentDirectory service is validated before using it; HTTP directory
+  indexes and SMB shares are not DLNA services. This does not require a full
+  multicast scan. Work remains serialized by the DLNA background worker.
+
 - Library-local SoapString and SoapVector use bounded, explicit PSRAM storage,
   without changing Arduino String, global new, or the platform malloc policy.
 - Allocation failure is reported instead of falling back to internal RAM or
@@ -28,6 +34,10 @@ Local changes:
   port 80. Non-HTTP schemes are refused. Media URL hostnames remain unsupported
   by the upstream IPv4 resource parser in this experimental version.
 - SOAP object IDs are XML escaped; overly long track IDs are refused.
+- MiniXPath tracks the opening attribute quote delimiter. An apostrophe in a
+  double-quoted file ID (or a double quote in a single-quoted ID) is data, not
+  the end of the attribute. This fixes Simple UPnP Server directory replies
+  containing filenames such as `I'll Be Missing You.mp3`.
 - The video-class index check is corrected.
 
 The library's optional search/file-download/Wake-on-LAN functions are not used
