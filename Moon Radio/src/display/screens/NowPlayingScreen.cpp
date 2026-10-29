@@ -130,21 +130,28 @@ int moonPhaseIndex(const tm& localTime) {
   return 9;
 }
 
-uint8_t moonAlphaFromPixel(uint8_t r, uint8_t g, uint8_t b, uint8_t pngAlpha,
+uint8_t moonAlphaFromPixel(uint8_t, uint8_t, uint8_t, uint8_t pngAlpha,
                            int x, int y) {
   constexpr float kMoonCenterX = (kMoonImageWidth - 1) * 0.5f;
   constexpr float kMoonCenterY = (kMoonImageHeight - 1) * 0.5f;
-  constexpr float kMoonRadiusX = 40.5f;
-  constexpr float kMoonRadiusY = 39.0f;
+  // The source PNGs contain a black matte around the moon.  Keep the mask
+  // slightly inside that matte; otherwise those pixels become a dark halo
+  // when the RGB565A8 image is composited over the screen background.
+  constexpr float kMoonRadiusX = 39.0f;
+  constexpr float kMoonRadiusY = 37.0f;
   const float dx = (static_cast<float>(x) - kMoonCenterX) / kMoonRadiusX;
   const float dy = (static_cast<float>(y) - kMoonCenterY) / kMoonRadiusY;
-  const bool insideMoonDisc = (dx * dx + dy * dy) <= 1.0f;
-  if (insideMoonDisc) return pngAlpha;
+  const float radius = dx * dx + dy * dy;
 
-  const float lum = 0.299f * r + 0.587f * g + 0.114f * b;
-  if (lum <= 2.0f) return 0;
-  if (lum >= 14.0f) return pngAlpha;
-  const float t = (lum - 2.0f) / 10.0f;
+  // Use the geometry for the main mask instead of classifying dark lunar
+  // pixels by brightness.  Only the narrow outer band is antialiased.
+  constexpr float kSolidRadius = 0.91f;
+  constexpr float kEdgeRadius = 1.0f;
+  if (radius <= kSolidRadius) return pngAlpha;
+  if (radius >= kEdgeRadius) return 0;
+
+  const float t = (kEdgeRadius - radius) /
+                  (kEdgeRadius - kSolidRadius);
   const float smooth = t * t * (3.0f - 2.0f * t);
   return static_cast<uint8_t>(pngAlpha * smooth + 0.5f);
 }
