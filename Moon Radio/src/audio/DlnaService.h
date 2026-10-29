@@ -11,6 +11,7 @@ class DlnaService {
  public:
   static constexpr uint16_t pageSize = 32;
   bool scan();
+  bool connect(const String& ip, uint16_t port);
   bool browse(unsigned server, const String& id, const String& title,
               uint32_t offset, uint32_t revision);
   void close();
@@ -41,12 +42,14 @@ class DlnaService {
   size_t playingCount() const { return playing_.size(); }
 
  private:
-  enum class Operation { Scan, Browse, Clear };
+  enum class Operation { Scan, Browse, Clear, Connect };
   struct Command {
     Operation op{Operation::Clear};
     unsigned server{0};
     uint32_t offset{0}, generation{0};
     char id[513]{}, title[257]{};
+    uint32_t address{0};
+    uint16_t port{0};
   };
   bool start();
   bool submit(Command command);

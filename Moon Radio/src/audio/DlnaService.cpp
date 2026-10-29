@@ -94,6 +94,14 @@ bool DlnaService::scan() {
   return submit(c);
 }
 
+bool DlnaService::connect(const String& ip, uint16_t port) {
+  IPAddress address;
+  if (!port || !address.fromString(ip) || !address[0] || address[0] >= 224 ||
+      address == IPAddress(255,255,255,255)) return false;
+  Command c; c.op = Operation::Connect; c.address = static_cast<uint32_t>(address); c.port = port;
+  return submit(c);
+}
+
 bool DlnaService::browse(unsigned server, const String& id, const String& title,
                          uint32_t offset, uint32_t revision) {
   if (!mutex_ || id.isEmpty() || id.length() > 512 || offset > 1000000) return false;
@@ -140,6 +148,8 @@ void DlnaService::task() {
     bool ok = true;
     soapObjectVect_t result;
     soapServerVect_t found;
+    int connectedServer = -1;
+    SoapString connectedName;
     if (c.op == Operation::Scan) {
       soap_.seekServer(5);
       for (unsigned i = 0; i < soap_.getServerCount(); ++i) {
@@ -150,16 +160,31 @@ void DlnaService::task() {
     } else if (c.op == Operation::Browse) {
       ok = soap_.browseServer(c.server, c.id, &result, c.offset, pageSize) &&
            !SoapMemory::failed.load() && soap_.lastNumberReturned() <= pageSize;
+    } else if (c.op == Operation::Connect) {
+      connectedServer = soap_.connectServer(IPAddress(c.address), c.port);
+      ok = connectedServer >= 0;
+      if (ok) {
+        soapServer_t info;
+        ok = soap_.getServerInfo(connectedServer, &info);
+        connectedName = info.friendlyName;
+      }
+      if (ok) ok = soap_.browseServer(connectedServer, "0", &result, 0, pageSize) &&
+                   soap_.lastNumberReturned() <= pageSize;
+      if (ok) for (unsigned i = 0; i < soap_.getServerCount(); ++i) {
+        soapServer_t info;
+        if (soap_.getServerInfo(i, &info)) found.push_back(info);
+      }
     }
     SoapString nextId, nextHeading;
     if (ok && c.op == Operation::Browse) { nextId = c.id; nextHeading = c.title; }
+    if (ok && c.op == Operation::Connect) { nextId = "0"; nextHeading = connectedName; }
     const bool memoryFailed = SoapMemory::failed.load();
     ok = ok && !memoryFailed;
     xSemaphoreTake(mutex_, portMAX_DELAY);
     if (c.generation != generation_.load() || c.op == Operation::Clear) {
       clearPublished(); soap_.clearServerList();
     } else if (!ok) {
-      error_ = memoryFailed ? "memory" : "browse";
+      error_ = memoryFailed ? "memory" : c.op == Operation::Connect ? "connect" : "browse";
       // A failed scan has replaced the library's server indices. Invalidate
       // the old published indices too, instead of offering stale actions.
       if (c.op == Operation::Scan) { clearPublished(); soap_.clearServerList(); error_ = memoryFailed ? "memory" : "scan"; }
@@ -167,8 +192,10 @@ void DlnaService::task() {
       clearPublished(); servers_.swap(found);
       error_ = servers_.size() ? "" : "no_servers";
     } else {
+      if (c.op == Operation::Connect) servers_.swap(found);
       entries_.swap(result); objectId_.swap(nextId); heading_.swap(nextHeading);
-      server_ = c.server; serverView_ = false; offset_ = c.offset;
+      server_ = c.op == Operation::Connect ? connectedServer : c.server;
+      serverView_ = false; offset_ = c.offset;
       nextOffset_ = offset_ + soap_.lastNumberReturned();
       more_ = soap_.lastNumberReturned() > 0 && (soap_.lastTotalMatches() > 0 ?
               nextOffset_ < soap_.lastTotalMatches() : soap_.lastNumberReturned() == pageSize);
