@@ -11,6 +11,7 @@ A Moon Radio ESP32-S3 alapú internetes rádió és hálózati zenelejátszó,
 - DLNA hálózati zenelejátszás: a rádió automatikusan megkeresi a helyi hálózat
   PC-n, NAS-on vagy szerveren megosztott DLNA-médiatárait. A mappák és zeneszámok
   a kijelzőn vagy a webes felületen böngészhetők, a zene közvetlenül lejátszható.
+  A webes DLNA-oldalon kézi IP-cím- és portmegadás is választható.
 - Helyi zenefájlok lejátszása SD-kártyáról a FREENOVE FNK0104S beépített,
   4 bites SD_MMC-olvasójával vagy az ILI9488/ST7796 profilok SPI-s olvasójával.
 - Mentett állomáslista, keresés, szerkesztés és presetek.
@@ -106,6 +107,7 @@ touchscreen and browser-based control.
 - DLNA network music playback: the radio automatically discovers DLNA media
   libraries shared by PCs, NAS devices or servers on the local network.
   Browse folders and tracks on the display or web interface and play music directly.
+  The web DLNA page also offers an optional server IP address and port entry.
 - Local music playback from the FREENOVE FNK0104S integrated 4-bit SD_MMC
   reader or the SPI reader configured by the ILI9488/ST7796 profiles.
 - Saved station list, search, editing and presets.
