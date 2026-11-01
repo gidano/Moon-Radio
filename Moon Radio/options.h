@@ -89,7 +89,7 @@
 
 /* Album cover lookup */
 #define USE_LASTFM_COVER
-#define LASTFM_API_KEY "Ide írd az igényelt API key értékét"
+#define LASTFM_API_KEY ""    //    https://www.last.fm/api/authentication
 /*****************************************/
 
 /* ENCODER 1 */
