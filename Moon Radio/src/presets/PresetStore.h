@@ -20,7 +20,7 @@ class PresetStore {
   bool begin();
   bool selectBank(uint8_t bank);
   uint8_t bank() const;
-  const String& bankLabel(uint8_t bank) const;
+  String bankLabel(uint8_t bank) const;
   const RadioPreset* slot(uint8_t slot) const;
   bool saveSlot(uint8_t slot, const String& name, const String& url);
   bool clearSlot(uint8_t slot);

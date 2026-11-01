@@ -1,4 +1,5 @@
 #include "PresetStore.h"
+#include "../i18n/Language.h"
 
 namespace {
 
@@ -30,9 +31,12 @@ bool PresetStore::selectBank(uint8_t bank) {
 
 uint8_t PresetStore::bank() const { return bank_; }
 
-const String& PresetStore::bankLabel(uint8_t bank) const {
-  static const String empty;
-  return bank < kBankCount ? labels_[bank] : empty;
+String PresetStore::bankLabel(uint8_t bank) const {
+  if (bank >= kBankCount) return String();
+  // Keep persisted/user-defined labels intact. Translate only the original
+  // default for this bank, including defaults read from an older banks.txt.
+  return labels_[bank] == kDefaultLabels[bank]
+             ? String(Language::text(kDefaultLabels[bank])) : labels_[bank];
 }
 
 const RadioPreset* PresetStore::slot(uint8_t slot) const {
