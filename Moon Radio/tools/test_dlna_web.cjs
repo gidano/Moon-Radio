@@ -14,7 +14,7 @@ class Element {
   click() { return this.disabled ? undefined : this.onclick?.(); }
 }
 async function settle() { for (let i = 0; i < 12; ++i) await new Promise(resolve => setImmediate(resolve)); }
-async function radio(language = 'hu') {
+async function radio(language = 'hu', embedded = false) {
   const nodes = new Map();
   const get = id => { if (!nodes.has(id)) nodes.set(id, new Element()); return nodes.get(id); };
   const translated = ['title','scan','up','queueNote'].map(key => { const n = new Element(); n.dataset.t = key; return n; });
@@ -25,7 +25,9 @@ async function radio(language = 'hu') {
   let status = {source:'radio',stationName:'Test radio',title:''};
   let tick;
   const calls = [];
-  const document = {getElementById:get,createElement:() => new Element(),querySelectorAll:() => translated,documentElement:{},hidden:false,addEventListener:() => {},removeEventListener:() => {}};
+  const document = {getElementById:id => embedded && id === 'dlna-browser' ? null : get(id),createElement:() => new Element(),querySelectorAll:() => translated,documentElement:{lang:language},hidden:false,addEventListener:() => {},removeEventListener:() => {}};
+  let now = 10000;
+  class Clock extends Date { static now() { return now; } }
   const fetch = async (url, options = {}) => {
     const args = Object.fromEntries(options.body || []);
     calls.push({url,args});
@@ -37,9 +39,11 @@ async function radio(language = 'hu') {
     return {ok:true,json:async () => ({ok:true})};
   };
   const window = {};
-  vm.runInNewContext(source, {window,document,fetch,URLSearchParams,setInterval:fn => {tick = fn;},clearInterval:()=>{},console});
+  vm.runInNewContext(source, {window,document,fetch,URLSearchParams,Date:Clock,setInterval:fn => {tick = fn;},clearInterval:()=>{},console});
+  if (embedded) await window.mountDlnaBrowser(root, true).ready;
   await settle();
   return {get,calls,document,translated,
+    setLanguage:value => {language = value; now += 6000;},
     setState:s => {state = s;},
     setStatus:s => {status = s;},
     refresh:async () => {tick(); await settle();},
@@ -58,6 +62,26 @@ test('all four lowercase radio languages select the correct translation', async 
     assert.equal(r.translated[0].textContent, title);
     assert.equal(r.document.documentElement.lang, lang);
   }
+});
+
+test('an open DLNA page follows language changes without losing its folder', async () => {
+  const r = await radio('en');
+  r.setState({...page(1, 32, true, [song]), heading:'My music'});
+  await r.refresh();
+  r.setLanguage('de');
+  await r.refresh();
+  assert.equal(r.translated[0].textContent, 'Netzwerkmusik');
+  assert.equal(r.document.documentElement.lang, 'de');
+  assert.equal(r.get('heading').textContent, 'My music');
+  assert.equal(r.get('page').textContent, '33–33');
+});
+
+test('an embedded DLNA browser does not change the surrounding page language', async () => {
+  const r = await radio('en', true);
+  r.setLanguage('pl');
+  await r.refresh();
+  assert.equal(r.translated[0].textContent, 'Muzyka sieciowa');
+  assert.equal(r.document.documentElement.lang, 'en');
 });
 
 test('discovery, server selection, folder navigation, track playback and controls', async () => {

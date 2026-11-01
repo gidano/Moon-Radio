@@ -8,7 +8,42 @@ const languages = ['hu', 'en', 'de', 'pl'];
 const script = fs.readFileSync(path.join(root, 'data/web/language.js'), 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
+// Audit the actual firmware dictionary, including escaped Unicode strings.
+const dictionary = new Map();
+for (const [, fields] of fs.readFileSync(path.join(root, 'src/i18n/Language.cpp'), 'utf8').matchAll(/^  \{(.*)\},?$/gm)) {
+    const row = JSON.parse('[' + fields + ']');
+    assert.equal(row.length, 4);
+    assert(!dictionary.has(row[0]), 'Duplicate translation: ' + row[0]);
+    assert(row.every(value => typeof value === 'string' && value.length));
+    const placeholders = text => (text.match(/%(?:\d*\$)?[-+\d.]*[a-z]/gi) || []).sort().join(',');
+    assert(row.every(value => placeholders(value) === placeholders(row[0])), 'Format placeholders: ' + row[0]);
+    dictionary.set(row[0], row);
+}
+function auditFirmware(directory) {
+    for (const entry of fs.readdirSync(directory, {withFileTypes:true})) {
+        const filename = path.join(directory, entry.name);
+        if (entry.isDirectory()) auditFirmware(filename);
+        else if (entry.name.endsWith('.cpp')) {
+            for (const [, literal] of fs.readFileSync(filename, 'utf8').matchAll(/Language::text\(("(?:[^"\\]|\\.)*")\)/g)) {
+                assert(dictionary.has(JSON.parse(literal)), filename + ': missing translation ' + literal);
+            }
+        }
+    }
+}
+auditFirmware(path.join(root, 'src'));
+assert.deepEqual(dictionary.get('HANGERŐ'), ['HANGERŐ', 'VOLUME', 'LAUTSTÄRKE', 'GŁOŚNOŚĆ']);
+assert.deepEqual(dictionary.get('KEDV'), ['KEDV', 'FAV', 'FAVOR', 'ULUB']);
+assert.deepEqual(dictionary.get('MAGYAR'), ['MAGYAR', 'HUNGARY', 'UNGARN', 'WĘGRY']);
+assert.deepEqual(dictionary.get('VEGYES'), ['VEGYES', 'MIXED', 'GEMISCHT', 'RÓŻNE']);
+
 (async () => {
+    for (const [language, expected] of [['hu','A fájlrendszer foglalt.'],['en','Filesystem is busy.'],['de','Dateisystem ist beschäftigt.'],['pl','System plików jest zajęty.']]) {
+        const context = {window:{},document:{hidden:true,documentElement:{lang:language},addEventListener() {}},setInterval() {}};
+        vm.runInNewContext(script, context);
+        assert.equal(context.window.radioErrorText('filesystem busy'), expected);
+        assert.equal(context.window.radioErrorText('Filesystem is busy.'), expected);
+        assert(!context.window.radioErrorText('unrecognized technical error').includes('unrecognized'));
+    }
     let pages = 0;
     for (const language of languages) {
         for (const family of ['index', 'settings', 'search']) {
@@ -33,6 +68,20 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
         }
         const settings = fs.readFileSync(path.join(root, `data/web/settings_${language}.html`), 'utf8');
         const change = settings.slice(settings.indexOf('        async function changeWebLanguage'), settings.indexOf('        function togglePanel'));
+        const testAnnouncement = settings.slice(settings.indexOf('        async function testClockTts()'), settings.indexOf('        function selectBackgroundPreset'));
+        for (const voice of ['HU','EN','DE','PL','NL','FR','RO']) {
+            let sent;
+            const context = {
+                document:{getElementById:id => id === 'clockTtsLanguage' ? {value:voice} : {}},
+                fetch:async (url, options) => { sent = JSON.parse(options.body); return {ok:true}; },console
+            };
+            vm.createContext(context);
+            vm.runInContext(testAnnouncement, context);
+            await context.testClockTts();
+            assert.equal(sent.language, voice);
+            const expected = {HU:'Az idő',EN:'This is',DE:'Dies ist',PL:'To jest',NL:'Dit is',FR:'Ceci est',RO:'Acesta este'};
+            assert(sent.text.startsWith(expected[voice]), `${language} page uses wrong test voice ${voice}`);
+        }
         for (const succeeds of [true, false]) {
             const selected = { value: language, disabled: false };
             let alertCount = 0;
@@ -71,5 +120,5 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
         vm.runInNewContext(script, { window: {}, document: { hidden: false, documentElement: { lang: 'hu' }, addEventListener() {} }, fetch, setInterval() {}, location: { replace() { assert.fail('unexpected redirect'); } } });
         await flush();
     }
-    console.log(`OK: all ${pages} HTML pages parse; 48 language/page combinations, 8 save success/failure cases, and offline/invalid responses pass.`);
+    console.log(`OK: firmware dictionary coverage and format placeholders; ${pages} HTML pages; 48 language/page combinations; 8 save cases; 28 announcement language cases; localized errors and offline/invalid responses.`);
 })().catch(error => { console.error(error); process.exitCode = 1; });
