@@ -391,7 +391,7 @@ bool AudioEngine::connectFile(fs::FS& fs, const String& path, int32_t seconds) {
   currentUrl_ = path;
   streamReadyAt_ = ok ? max(1UL, millis()) : 0;
   stateCode_ = ok ? "SD" : "SD!";
-  statusText_ = ok ? "SD" : "SD read error";
+  statusText_ = ok ? "SD" : "SD olvasási hiba";
   suppressEndOfFile_ = false;
   setOutputEnabled(ok);
   return ok;
@@ -519,7 +519,7 @@ AudioSnapshot AudioEngine::snapshot(const String& stationName) {
     result.streamTitle = streamTitle_;
     result.codec = codec_;
     result.statusText = Language::text(statusText_.c_str());
-    result.stateCode = stateCode_;
+    result.stateCode = Language::text(stateCode_.c_str());
     result.bitrateKbps = bitrateKbps_;
     xSemaphoreGive(metadataMutex_);
   }
