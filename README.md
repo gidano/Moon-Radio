@@ -2,9 +2,9 @@
 
 <div align="center">
 
-[![YouTube](https://img.shields.io/badge/YouTube-Moon%20Radio%20bemutat%C3%B3-red?logo=youtube&logoColor=white)](https://youtu.be/3OMWfQtBlBg?si=3hZpE63FgSKS6RIv)
+[![YouTube](https://img.shields.io/badge/YouTube-Moon%20Radio%20bemutat%C3%B3-red?logo=youtube&logoColor=white)](https://youtu.be/ZOrJNf5vZH8)
 
-[![Moon Radio – bemutató videó](https://img.youtube.com/vi/3OMWfQtBlBg/hqdefault.jpg)](https://youtu.be/3OMWfQtBlBg?si=3hZpE63FgSKS6RIv)
+[![Moon Radio – bemutató videó](https://img.youtube.com/vi/ZOrJNf5vZH8/hqdefault.jpg)](https://youtu.be/ZOrJNf5vZH8)
 
 </div>
 
