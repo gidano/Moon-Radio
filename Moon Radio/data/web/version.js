@@ -1,4 +1,4 @@
-window.MOON_RADIO_VERSION = "0.4.0";
+window.MOON_RADIO_VERSION = "0.4.2";
 
 (function () {
   function applyVersion() {
