@@ -1488,7 +1488,8 @@ void RadioWebServer::logoUploadFinished() {
   if (logoUploadFailed_ || logoUploadPath_.isEmpty()) {
     if (!logoUploadPath_.isEmpty()) LittleFS.remove(logoUploadPath_);
     server_.send(400, kJson,
-                 "{\"ok\":false,\"error\":\"Hibás logófájl.\"}");
+                 String("{\"ok\":false,\"error\":\"") +
+                     jsonEscape(Language::text("Hibás logófájl.")) + "\"}");
   } else {
     server_.send(200, kJson,
                  "{\"ok\":true,\"path\":\"" +
@@ -1538,7 +1539,8 @@ void RadioWebServer::artworkCacheFinished() {
   if (!queued) {
     if (!artworkUploadPath_.isEmpty()) LittleFS.remove(artworkUploadPath_);
     server_.send(503, kJson,
-                 "{\"ok\":false,\"error\":\"A logófeldolgozó foglalt.\"}");
+                 String("{\"ok\":false,\"error\":\"") +
+                     jsonEscape(Language::text("A logófeldolgozó foglalt.")) + "\"}");
   } else {
     server_.send(202, kJson, "{\"ok\":true}");
   }
