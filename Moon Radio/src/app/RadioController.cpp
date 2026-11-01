@@ -267,7 +267,7 @@ bool RadioController::begin() {
   display_.setScreenFlipped(screenFlipped_);
   display_.setVisualizerMode(static_cast<WaveVu::Mode>(visualizerMode_));
   display_.setHeaderIpVisible(headerIpVisible_);
-  if (!headerIpVisible_) display_.showStartupIp(10000);
+  if (!headerIpVisible_) display_.showStartupIp(30000);
   display_.setWifiDetailsVisible(wifiDetailsVisible_);
   display_.setVolumeGraphicVisible(volumeGraphicVisible_);
   display_.setBufferBarVisible(bufferBarVisible_);
@@ -955,6 +955,11 @@ size_t RadioController::bufferFree() { return audio_.bufferFree(); }
 
 size_t RadioController::bufferSize() { return audio_.bufferSize(); }
 
+bool RadioController::copyDisplayFrameRow(uint16_t y, uint8_t* destination,
+                                           size_t destinationBytes) const {
+  return display_.copyCaptureRow(y, destination, destinationBytes);
+}
+
 bool RadioController::playlistActive() const { return dlnaMode_ ? dlna_.playingCount() > 0 : playlist_.active(); }
 
 int RadioController::playlistIndex() const { return dlnaMode_ ? dlna_.playingIndex() : playlist_.index(); }
@@ -1043,8 +1048,13 @@ size_t RadioController::stationCountAction(void* context) {
 String RadioController::stationNameAction(void* context, size_t index) {
   auto* radio = static_cast<RadioController*>(context);
   if (radio->dlnaMode_) return radio->dlnaSelectorName(index);
-  if (radio->sdMode_)
-    return index < radio->sdSelectorItems_.size() ? radio->sdSelectorItems_[index].name : String();
+  if (radio->sdMode_) {
+    if (index >= radio->sdSelectorItems_.size()) return String();
+    const auto& item = radio->sdSelectorItems_[index];
+    // Menu entries use stable source text; filenames keep their original names.
+    return item.path.startsWith(":") || item.name == "[..] Szülőkönyvtár"
+               ? String(Language::text(item.name.c_str())) : item.name;
+  }
   const Station* station =
       static_cast<RadioController*>(context)->stations().get(index);
   return station ? station->name : String();
@@ -1209,16 +1219,16 @@ void RadioController::loadSdSelector(const String& path, size_t offset) {
   sdSelectorDirectory_ = directory;
   sdSelectorOffset_ = offset;
   sdSelectorItems_.clear();
-  sdSelectorItems_.push_back({Language::text("Vissza a rádióhoz"), ":radio", false});
-  sdSelectorItems_.push_back({Language::text("SD újraolvasása"), ":retry", false});
+  sdSelectorItems_.push_back({"Vissza a rádióhoz", ":radio", false});
+  sdSelectorItems_.push_back({"SD újraolvasása", ":retry", false});
   if (directory != "/") {
     String parent = directory.substring(0, directory.lastIndexOf('/'));
     if (parent.isEmpty()) parent = "/";
-    sdSelectorItems_.push_back({Language::text("[..] Szülőkönyvtár"), parent, true});
+    sdSelectorItems_.push_back({"[..] Szülőkönyvtár", parent, true});
   }
-  if (offset) sdSelectorItems_.push_back({Language::text("<< Előző oldal"), ":previous", false});
+  if (offset) sdSelectorItems_.push_back({"<< Előző oldal", ":previous", false});
   if (!ok) {
-    sdSelectorItems_.push_back({Language::text("SD olvasási hiba - újra"), ":retry", false});
+    sdSelectorItems_.push_back({"SD olvasási hiba - újra", ":retry", false});
   } else {
     std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
       if (a.directory != b.directory) return a.directory;
@@ -1228,8 +1238,8 @@ void RadioController::loadSdSelector(const String& path, size_t offset) {
       if (entry.directory) entry.name = "[+] " + entry.name;
       sdSelectorItems_.push_back(std::move(entry));
     }
-    if (entries.empty()) sdSelectorItems_.push_back({Language::text("Nincs zenei fájl"), ":retry", false});
-    if (more) sdSelectorItems_.push_back({Language::text(">> Következő oldal"), ":more", false});
+    if (entries.empty()) sdSelectorItems_.push_back({"Nincs zenei fájl", ":retry", false});
+    if (more) sdSelectorItems_.push_back({">> Következő oldal", ":more", false});
   }
   sdSelectorReady_ = true;
 }
