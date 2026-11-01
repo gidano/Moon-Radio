@@ -316,7 +316,7 @@
       alert('Station added and saved.');
     }catch(e){
       console.error(e);
-      alert('Failed to add station: ' + e.message);
+      alert('Failed to add station: ' + window.radioErrorText(e.message));
     }
   }
 

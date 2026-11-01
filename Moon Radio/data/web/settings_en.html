@@ -178,6 +178,20 @@
         <h1>⚙️ Settings</h1>
         <p class="subtitle">Time, background and weather in one place.</p>
 
+        <div class="panel" id="panel-screenshot">
+            <div class="panel-header"><h2>Screenshot</h2></div>
+            <div class="panel-body">
+                <div class="actions" style="margin-top:0">
+                    <button class="primary" type="button" onclick="captureScreen()">Take screenshot</button>
+                    <label class="checkbox-row"><input id="screenLive" type="checkbox" onchange="toggleScreenLive(this.checked)"> Live view</label>
+                </div>
+                <div class="hint">The exact 480×320 pixel image from the radio display. Live view refreshes every 2.5 seconds.</div>
+                <canvas id="screenCanvas" width="960" height="640" style="display:none;width:100%;max-width:720px;height:auto;margin-top:14px;border-radius:10px;image-rendering:auto"></canvas>
+                <div class="actions" style="margin-top:14px"><a id="screenDownload" class="secondary" style="display:none" download="moon-radio.png">Download PNG</a></div>
+                <div id="screenMessage" class="status"></div>
+            </div>
+        </div>
+
         <div class="panel" id="panel-language">
             <div class="panel-header">
                 <h2>Language</h2>
@@ -189,8 +203,8 @@
                         <select id="webLanguage" onchange="changeWebLanguage(this.value)">
                             <option value="hu">Hungarian</option>
                             <option value="en">English</option>
-                            <option value="de">Deutsch</option>
-                            <option value="pl">Polski</option>
+                            <option value="de">German</option>
+                            <option value="pl">Polish</option>
                         </select>
                         <div class="hint">This also changes the radio display and time announcement language. The selection is saved after restart.</div>
                     </div>
@@ -342,13 +356,13 @@
                         <div>
                             <label for="clockTtsLanguage">Announcement language</label>
                             <select id="clockTtsLanguage">
-                                <option value="HU">Magyar</option>
+                                <option value="HU">Hungarian</option>
                                 <option value="EN">English</option>
-                                <option value="DE">Deutsch</option>
-                                <option value="PL">Polski</option>
-                                <option value="NL">Nederlands</option>
-                                <option value="FR">Français</option>
-                                <option value="RO">Română</option>
+                                <option value="DE">German</option>
+                                <option value="PL">Polish</option>
+                                <option value="NL">Dutch</option>
+                                <option value="FR">French</option>
+                                <option value="RO">Romanian</option>
                             </select>
                         </div>
                         <div>
@@ -474,6 +488,59 @@
             button.textContent = panel.classList.contains('collapsed') ? 'Open' : 'Close';
         }
 
+        let screenTimer = 0;
+        let screenObjectUrl = '';
+
+        async function captureScreen() {
+            const message = document.getElementById('screenMessage');
+            message.textContent = 'Loading screenshot...';
+            try {
+                const response = await fetch('/api/frame', { cache: 'no-store' });
+                if (!response.ok) throw new Error('frame');
+                const width = Number(response.headers.get('X-W')) || 480;
+                const height = Number(response.headers.get('X-H')) || 320;
+                const bytes = new Uint8Array(await response.arrayBuffer());
+                if (bytes.length !== width * height * 2) throw new Error('size');
+                const sourceCanvas = document.createElement('canvas');
+                sourceCanvas.width = width; sourceCanvas.height = height;
+                const sourceContext = sourceCanvas.getContext('2d');
+                const image = sourceContext.createImageData(width, height);
+                for (let i = 0, o = 0; i < bytes.length; i += 2, o += 4) {
+                    const value = (bytes[i] << 8) | bytes[i + 1];
+                    image.data[o] = ((value >> 11) & 31) * 255 / 31;
+                    image.data[o + 1] = ((value >> 5) & 63) * 255 / 63;
+                    image.data[o + 2] = (value & 31) * 255 / 31;
+                    image.data[o + 3] = 255;
+                }
+                sourceContext.putImageData(image, 0, 0);
+                const canvas = document.getElementById('screenCanvas');
+                canvas.width = width * 2; canvas.height = height * 2;
+                const context = canvas.getContext('2d');
+                context.imageSmoothingEnabled = true;
+                context.imageSmoothingQuality = 'high';
+                context.drawImage(sourceCanvas, 0, 0, canvas.width, canvas.height);
+                canvas.style.display = 'block';
+                canvas.toBlob((blob) => {
+                    if (!blob) return;
+                    if (screenObjectUrl) URL.revokeObjectURL(screenObjectUrl);
+                    screenObjectUrl = URL.createObjectURL(blob);
+                    const download = document.getElementById('screenDownload');
+                    download.href = screenObjectUrl;
+                    download.download = `moon-radio-960x640-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.png`;
+                    download.style.display = 'inline-block';
+                }, 'image/png');
+                message.textContent = 'Screenshot ready.';
+            } catch (error) {
+                console.error(error);
+                message.textContent = 'The screenshot is not ready yet. Please try again shortly.';
+            }
+        }
+
+        function toggleScreenLive(enabled) {
+            clearInterval(screenTimer); screenTimer = 0;
+            if (enabled) { captureScreen(); screenTimer = setInterval(captureScreen, 2500); }
+        }
+
         function selectTimezonePreset(value) {
             if (value) {
                 document.getElementById('timezoneValue').value = value;
@@ -511,10 +578,16 @@
             message.textContent = 'Starting test announcement...';
             try {
                 const language = document.getElementById('clockTtsLanguage').value || 'EN';
+                const testText = {
+                    HU: 'Az idő próbabemondás.', EN: 'This is a test time announcement.',
+                    DE: 'Dies ist eine Testansage der Uhrzeit.', PL: 'To jest testowy komunikat czasu.',
+                    NL: 'Dit is een test van de tijdmelding.', FR: "Ceci est un test de l’annonce de l’heure.",
+                    RO: 'Acesta este un test al anunțului orei.'
+                };
                 const response = await fetch('/api/tts', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: 'This is a test time announcement.', language })
+                    body: JSON.stringify({ text: testText[language] || testText.EN, language })
                 });
                 if (!response.ok) throw new Error('tts failed');
                 message.textContent = 'Test announcement sent.';
@@ -614,7 +687,7 @@
                 status.textContent = 'Background file deleted.';
             } catch (error) {
                 console.error(error);
-                status.textContent = `Could not delete the background file: ${error.message}`;
+                status.textContent = `Could not delete the background file: ${window.radioErrorText(error.message)}`;
             }
         }
 
@@ -664,7 +737,7 @@
                 await loadBackgrounds(uploadedPath);
             } catch (error) {
                 console.error(error);
-                status.textContent = `Could not upload the background file: ${error.message}`;
+                status.textContent = `Could not upload the background file: ${window.radioErrorText(error.message)}`;
             }
         }
 

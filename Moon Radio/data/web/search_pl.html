@@ -316,7 +316,7 @@
       alert('Stacja została dodana i zapisana.');
     }catch(e){
       console.error(e);
-      alert('Nie udało się dodać stacji: ' + e.message);
+      alert('Nie udało się dodać stacji: ' + window.radioErrorText(e.message));
     }
   }
 

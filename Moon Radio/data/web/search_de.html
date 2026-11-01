@@ -316,7 +316,7 @@
       alert('Sender hinzugefügt und gespeichert.');
     }catch(e){
       console.error(e);
-      alert('Sender konnte nicht hinzugefügt werden: ' + e.message);
+      alert('Sender konnte nicht hinzugefügt werden: ' + window.radioErrorText(e.message));
     }
   }
 

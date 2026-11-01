@@ -316,7 +316,7 @@
       alert('Állomás hozzáadva és elmentve.');
     }catch(e){
       console.error(e);
-      alert('Nem sikerült hozzáadni az állomást: ' + e.message);
+      alert('Nem sikerült hozzáadni az állomást: ' + window.radioErrorText(e.message));
     }
   }
 

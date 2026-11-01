@@ -14,8 +14,29 @@
   };
   for (const language of Object.keys(manualWords)) Object.assign(words[language], manualWords[language]);
   window.mountDlnaBrowser = (root, embedded = false) => {
-  let w = words.HU, state = null, path = [], pending = null, submitting = false, refreshing = false, rendered = '', notice = '';
+  let w = words[String(document.documentElement.lang || 'HU').toUpperCase()] || words.HU, state = null, path = [], pending = null, submitting = false, refreshing = false, rendered = '', notice = '';
   let disposed = false, timer = null;
+  let languageCheckedAt = 0;
+  async function syncLanguage() {
+    if (disposed || (languageCheckedAt && Date.now() - languageCheckedAt < 5000)) return;
+    languageCheckedAt = Date.now();
+    try {
+      const response = await fetch('/api/language', {cache:'no-store'});
+      if (!response.ok) return;
+      const {language} = await response.json();
+      const next = words[String(language).toUpperCase()];
+      if (!next || disposed) return;
+      if (w !== next) notice = '';
+      w = next;
+      root.querySelectorAll('[data-t]').forEach(node => { node.textContent = w[node.dataset.t]; });
+      // Embedded widgets must not disguise the surrounding page's language:
+      // language.js uses that value to redirect the main page after a switch.
+      if (!embedded) {
+        document.documentElement.lang = language.toLowerCase();
+        document.title = `Moon Radio · ${w.title}`;
+      }
+    } catch { /* Keep the last language while the radio is unavailable. */ }
+  }
   const el = id => root.querySelector('#' + id);
   if (embedded) root.querySelectorAll('[data-dlna-standalone]').forEach(node => { node.hidden = true; });
   const message = () => {
@@ -80,6 +101,7 @@
     if (refreshing || disposed) return;
     refreshing = true;
     try {
+      await syncLanguage();
       const response = await fetch('/api/dlna', {cache:'no-store'});
       if (!response.ok) throw new Error();
       const next = await response.json();
@@ -131,7 +153,7 @@
   el('pause').onclick = () => post('/api/toggle');
   const onVisibility = () => { if (!document.hidden) refresh(); };
   const ready = (async () => {
-    try { const r = await fetch('/api/language'); const {language} = await r.json(); w = words[String(language).toUpperCase()] || words.HU; document.documentElement.lang = (language || 'HU').toLowerCase(); } catch {}
+    await syncLanguage();
     if (disposed) return;
     root.querySelectorAll('[data-t]').forEach(node => { node.textContent = w[node.dataset.t]; });
     if (!embedded) document.title = `Moon Radio · ${w.title}`;
