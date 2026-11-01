@@ -142,6 +142,7 @@ class NowPlayingScreen {
   lv_obj_t* moonHost_{nullptr};
   lv_obj_t* moonImage_{nullptr};
   lv_obj_t* volumePopup_{nullptr};
+  lv_obj_t* volumePopupTitle_{nullptr};
   lv_obj_t* volumePopupIcon_{nullptr};
   lv_obj_t* volumePopupValueLabel_{nullptr};
   lv_obj_t* volumeSlider_{nullptr};

@@ -26,7 +26,7 @@ constexpr uint32_t kHeaderVolumeActiveColor = 0x7DD3FC;
 constexpr uint32_t kHeaderVolumeInactiveColor = 0x334155;
 
 constexpr uint32_t kVolumePopupDurationMs = 1500;
-constexpr uint32_t kIpVisibleDurationMs = 10000;
+constexpr uint32_t kIpVisibleDurationMs = 30000;
 constexpr lv_coord_t kHeaderTitleTop = 6;
 constexpr lv_coord_t kHeaderTitleHeight = 24;
 constexpr lv_coord_t kBufferBarLeft = 158;
@@ -640,9 +640,8 @@ void NowPlayingScreen::create(FontManager& fonts,
   lv_obj_add_flag(volumePopup_, LV_OBJ_FLAG_HIDDEN);
   lv_obj_move_foreground(volumePopup_);
 
-  lv_obj_t* volumeTitle = lv_label_create(volumePopup_);
-  lv_label_set_text(volumeTitle,
-                    reinterpret_cast<const char*>(u8"HANGER\u0150"));
+  lv_obj_t* volumeTitle = volumePopupTitle_ = lv_label_create(volumePopup_);
+  lv_label_set_text(volumeTitle, Language::text("HANGERŐ"));
   lv_obj_set_pos(volumeTitle, 16, 10);
   lv_obj_set_width(volumeTitle, 160);
   lv_obj_set_style_text_color(volumeTitle, lv_color_hex(0x94A3B8), 0);
@@ -734,6 +733,7 @@ void NowPlayingScreen::update(const AudioSnapshot& audio,
                               const String& backgroundPath,
                               uint8_t backgroundOpacity) {
   if (!stationLabel_) return;
+  setLabelTextIfChanged(volumePopupTitle_, Language::text("HANGERŐ"));
   updateBackground(backgroundEnabled, backgroundPath, backgroundOpacity);
   setLabelTextIfChanged(stationLabel_, audio.stationName.c_str());
   const bool playbackStopped =
@@ -1051,6 +1051,7 @@ void NowPlayingScreen::updateSourceButton() {
 
 void NowPlayingScreen::showVolumePopup() {
   if (!volumePopup_) return;
+  setLabelTextIfChanged(volumePopupTitle_, Language::text("HANGERŐ"));
   if (volumeSlider_) {
     sliderSyncing_ = true;
     lv_slider_set_value(volumeSlider_, currentVolume_, LV_ANIM_OFF);
