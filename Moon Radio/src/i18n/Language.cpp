@@ -12,6 +12,17 @@ constexpr Code kDefault = Code::LANGUAGE;
 Code active = kDefault;
 const char* const codes[] = {"hu", "en", "de", "pl"};
 const char* const messages[][4] = {
+  {"HANGERŐ", "VOLUME", "LAUTSTÄRKE", "GŁOŚNOŚĆ"},
+  {"KEDV", "FAV", "FAVOR", "ULUB"},
+  {"MAGYAR", "HUNGARY", "UNGARN", "WĘGRY"},
+  {"VEGYES", "MIXED", "GEMISCHT", "RÓŻNE"},
+  {"SD olvasási hiba", "SD read error", "SD-Lesefehler", "Błąd odczytu SD"},
+  {"KESZ", "RDY", "BEREIT", "GOT"},
+  {"SOR", "QUEUE", "WART", "KOL"},
+  {"FEJL", "HEAD", "KOPF", "NAGŁ"},
+  {"HIBA", "ERROR", "FEHLER", "BŁĄD"},
+  {"Hibás logófájl.", "Invalid logo file.", "Ungültige Logodatei.", "Nieprawidłowy plik logo."},
+  {"A logófeldolgozó foglalt.", "Logo processor is busy.", "Logoverarbeitung ist beschäftigt.", "Przetwarzanie logo jest zajęte."},
   {"[..] Szülőkönyvtár", "[..] Parent folder", "[..] Übergeordneter Ordner", "[..] Folder nadrzędny"},
   {"<< Előző oldal", "<< Previous page", "<< Vorherige Seite", "<< Poprzednia strona"},
   {">> Következő oldal", ">> Next page", ">> Nächste Seite", ">> Następna strona"},
@@ -69,8 +80,6 @@ const char* const messages[][4] = {
   {"[..] Vissza", "[..] Back", "[..] Zurück", "[..] Wstecz"},
   {"A forrás nem érhető el", "Source unavailable", "Quelle nicht verfügbar", "Źródło niedostępne"},
   {"Nem sikerült betölteni - újra", "Cannot load - retry", "Laden fehlgeschlagen - erneut", "Błąd wczytywania - ponów"},
-  {">> Következő oldal", ">> Next page", ">> Nächste Seite", ">> Następna strona"},
-  {"Nincs zenei fájl", "No music files", "Keine Musikdateien", "Brak plików muzycznych"},
   {"Görgess a listában", "Scroll the list", "Liste durchblättern", "Przewiń listę"},
   {"A kijelölt adó 3 másodperc múlva elindul", "Selected station starts in 3 seconds", "Gewählter Sender startet in 3 Sekunden", "Wybrana stacja ruszy za 3 sekundy"},
   {"LEJÁTSZÁS", "PLAY", "ABSPIELEN", "ODTWÓRZ"},
