@@ -337,6 +337,12 @@
                         <input id="albumCoversEnabled" type="checkbox">
                         Search and show album covers in place of the logo
                     </label>
+                    <div>
+                        <label for="lastFmApiKey">Last.fm API key</label>
+                        <div id="lastFmApiKeyError" style="color:#ff5f56; display:none; margin:6px 0;">A Last.fm API key is required for album cover search.</div>
+                        <input id="lastFmApiKey" type="password" autocomplete="off" placeholder="API key">
+                        <div class="hint">The key is stored on the device. Get one at <a href="https://www.last.fm/api/authentication" target="_blank" rel="noopener">last.fm/api/authentication</a></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -824,6 +830,7 @@
                 document.getElementById('bufferBarVisible').checked = display.bufferBar !== false;
                 document.getElementById('diagnosticsVisible').checked = !!display.diagnostics;
                 document.getElementById('albumCoversEnabled').checked = display.albumCovers !== false;
+                document.getElementById('lastFmApiKey').value = String(display.lastFmApiKey || '');
 
                 const weather = data.weather || {};
                 document.getElementById('weatherEnabled').checked = !!weather.enabled;
@@ -866,6 +873,7 @@
                 bufferBar: document.getElementById('bufferBarVisible').checked ? 'true' : 'false',
                 diagnostics: document.getElementById('diagnosticsVisible').checked ? 'true' : 'false',
                 albumCovers: document.getElementById('albumCoversEnabled').checked ? 'true' : 'false',
+                lastFmApiKey: document.getElementById('lastFmApiKey').value.trim(),
                 weatherEnabled: document.getElementById('weatherEnabled').checked ? 'true' : 'false',
                 latitude: document.getElementById('weatherLatitude').value.trim(),
                 longitude: document.getElementById('weatherLongitude').value.trim(),
@@ -881,6 +889,11 @@
             };
 
             try {
+                document.getElementById('lastFmApiKeyError').style.display = 'none';
+                if (payload.albumCovers === 'true' && !payload.lastFmApiKey) {
+                    document.getElementById('lastFmApiKeyError').style.display = 'block';
+                    throw new Error('A Last.fm API key is required for album cover search.');
+                }
                 const response = await fetch('/api/settings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -894,7 +907,7 @@
                 message.textContent = 'Settings saved.';
             } catch (error) {
                 console.error(error);
-                message.textContent = 'Could not save settings.';
+                message.textContent = error.message || 'Could not save settings.';
             }
         }
 
