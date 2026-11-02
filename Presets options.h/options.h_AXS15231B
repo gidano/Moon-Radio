@@ -88,8 +88,8 @@
 /*****************************************/
 
 /* ENCODER 1 */
-#define ENC_BTNR 16 // S1
-#define ENC_BTNL 15 // S2
+#define ENC_BTNR 15 // S1
+#define ENC_BTNL 16 // S2
 #define ENC_BTNB 7  // KEY
 // #define ENC_INTERNALPULLUP true
 
