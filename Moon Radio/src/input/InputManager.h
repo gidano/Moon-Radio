@@ -30,7 +30,12 @@ class InputManager {
     bool stableButton{true};
     bool longPressFired{false};
     uint32_t buttonChangedAt{0};
+    volatile uint8_t interruptPreviousAB{0};
+    volatile int16_t interruptAccumulator{0};
+    bool interruptDriven{false};
   };
+
+  static void IRAM_ATTR encoderInterrupt(void* argument);
 
   void updateEncoder(Encoder& encoder, void (*left)(void*),
                      void (*right)(void*), void (*pressed)(void*),
