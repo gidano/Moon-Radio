@@ -92,6 +92,7 @@
 #define ENC_BTNL 16 // S2
 #define ENC_BTNB 7  // KEY
 // #define ENC_INTERNALPULLUP true
+#define ENC_USE_INTERRUPT
 
 /* ENCODER 2 */
 // #define ENC2_BTNR 16 // S2
