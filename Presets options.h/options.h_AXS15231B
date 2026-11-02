@@ -85,9 +85,6 @@
 //#define I2S_MCLK 15
 /*****************************************/
 
-/* Album cover lookup */
-#define USE_LASTFM_COVER
-#define LASTFM_API_KEY ""    //    https://www.last.fm/api/authentication
 /*****************************************/
 
 /* ENCODER 1 */
