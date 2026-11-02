@@ -31,6 +31,11 @@ DisplayManager* DisplayManager::instance_ = nullptr;
 
 DisplayManager::DisplayManager() : presets_(LittleFS) {}
 
+bool DisplayManager::copyCaptureRow(uint16_t y, uint8_t* destination,
+                                    size_t destinationBytes) const {
+  return screenCapture_.copyRow(y, destination, destinationBytes);
+}
+
 void DisplayManager::setStartupDisplayState(bool colorInverted,
                                             bool screenFlipped) {
   // Do not send panel commands here: RadioController calls this before
@@ -138,6 +143,11 @@ bool DisplayManager::begin(const NowPlayingActions& actions) {
   }
   if (!drawBuffer_) {
     Serial.println("[display] LVGL puffer foglalasi hiba");
+    return false;
+  }
+
+  if (!screenCapture_.begin()) {
+    Serial.println("[display] screenshot puffer foglalasi hiba");
     return false;
   }
 #if DISPLAY_PROFILE_AXS15231B && AXS_FACTORY_DIRECT_LVGL
@@ -339,6 +349,8 @@ void DisplayManager::nativeVisualizerBlit(void* context, int32_t x, int32_t y,
       target[col] = __builtin_bswap16(source[col]);
     }
   }
+  manager->screenCapture_.captureNativeRect(pixels, 0, kAxsVuTop,
+                                            kAxsVuWidth, kAxsVuHeight);
   manager->device_.flushAxsVuFrame(manager->axsVuFrame_);
 #else
   (void)context;
@@ -654,10 +666,11 @@ bool DisplayManager::moveStationSelector(int8_t delta) {
 
   int32_t selected = static_cast<int32_t>(lv_roller_get_selected(selectorRoller_));
   selected += delta;
-  if (selected < 0) selected = 0;
-  if (selected >= static_cast<int32_t>(count)) {
-    selected = static_cast<int32_t>(count) - 1;
-  }
+  // The station selector is intentionally circular: moving left from the
+  // first station goes to the last one, and moving right from the last goes
+  // back to the first. All input paths (encoder and touch) use this method.
+  if (selected < 0) selected = static_cast<int32_t>(count) - 1;
+  if (selected >= static_cast<int32_t>(count)) selected = 0;
 
   if (selected == static_cast<int32_t>(lv_roller_get_selected(selectorRoller_))) {
     return true;
@@ -832,10 +845,18 @@ void DisplayManager::flush(lv_display_t* display, const lv_area_t* area,
   instance_->device_.flushAxsLvglRect(
       area->x1, area->y1, static_cast<int32_t>(width),
       static_cast<int32_t>(height), reinterpret_cast<uint16_t*>(pixels));
+  instance_->screenCapture_.captureRect(reinterpret_cast<uint16_t*>(pixels),
+                                        area->x1, area->y1,
+                                        static_cast<int32_t>(width),
+                                        static_cast<int32_t>(height));
   lv_display_flush_ready(display);
   return;
 #endif
 #endif
+  instance_->screenCapture_.captureRect(reinterpret_cast<uint16_t*>(pixels),
+                                        area->x1, area->y1,
+                                        static_cast<int32_t>(width),
+                                        static_cast<int32_t>(height));
   instance_->device_.startWrite();
   instance_->device_.setAddrWindow(area->x1, area->y1, width, height);
   instance_->device_.writePixels(reinterpret_cast<uint16_t*>(pixels),
