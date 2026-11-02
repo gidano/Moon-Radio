@@ -9,6 +9,7 @@
 #include "../weather/WeatherTypes.h"
 #include "DisplayDevice.h"
 #include "FontManager.h"
+#include "../screenshot/ScreenCapture.h"
 #include "screens/NowPlayingScreen.h"
 
 class DisplayManager {
@@ -64,6 +65,13 @@ class DisplayManager {
   bool colorInverted() const;
   void setScreenFlipped(bool flipped);
   bool screenFlipped() const;
+
+  // Copies one logical 480x320 RGB565 row in big-endian wire order.  The
+  // web server uses this instead of reading pixels back from the panel:
+  // several supported panels are write-only, while LVGL already renders the
+  // complete logical image in RAM/PSRAM.
+  bool copyCaptureRow(uint16_t y, uint8_t* destination,
+                      size_t destinationBytes) const;
 
  private:
   enum class PresetMode : uint8_t { Play = 0, Save = 1, Delete = 2 };
@@ -130,6 +138,7 @@ class DisplayManager {
   // The left 240 columns of the last valid 480x320 LVGL frame.  The VU
   // callback replaces only rows 258..319 before this is sent to AXS.
   uint16_t* axsVuFrame_{nullptr};
+  ScreenCapture screenCapture_;
   const uint16_t* nativeVuPixels_{nullptr};
   uint8_t* bootLogoPixels_{nullptr};
   lv_image_dsc_t bootLogoDescriptor_{};
