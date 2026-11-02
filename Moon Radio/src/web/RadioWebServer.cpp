@@ -334,6 +334,8 @@ void RadioWebServer::registerRoutes() {
                      String(radio_.diagnosticsVisible() ? "true" : "false") +
                      ",\"albumCovers\":" +
                      String(radio_.albumCoversEnabled() ? "true" : "false") +
+                     ",\"lastFmApiKey\":\"" +
+                     jsonEscape(radio_.lastFmApiKey()) + "\"" +
                      "},\"weather\":{\"enabled\":" +
                      String(weather.enabled ? "true" : "false") +
                      ",\"latitude\":" + String(weather.latitude, 4) +
@@ -362,6 +364,18 @@ void RadioWebServer::registerRoutes() {
   });
   server_.on("/api/settings", HTTP_POST, [this]() {
     const String body = server_.hasArg("plain") ? server_.arg("plain") : "";
+    String requestedAlbumCovers = argument("albumCovers");
+    if (requestedAlbumCovers.isEmpty() && !body.isEmpty())
+      requestedAlbumCovers = jsonStringField(body, "albumCovers");
+    String requestedLastFmKey = argument("lastFmApiKey");
+    if (requestedLastFmKey.isEmpty() && !body.isEmpty())
+      requestedLastFmKey = jsonStringField(body, "lastFmApiKey");
+    if ((requestedAlbumCovers == "true" || requestedAlbumCovers == "1") &&
+        requestedLastFmKey.isEmpty()) {
+      server_.send(400, kJson,
+                   "{\"ok\":false,\"error\":\"lastfm_api_key_required\"}");
+      return;
+    }
     String timezone = argument("timezone");
     if (timezone.isEmpty() && !body.isEmpty())
       timezone = jsonStringField(body, "timezone");
@@ -465,6 +479,12 @@ void RadioWebServer::registerRoutes() {
       radio_.setAlbumCoversEnabled(albumCovers == "true" ||
                                    albumCovers == "1");
     }
+    String lastFmApiKey = argument("lastFmApiKey");
+    if (lastFmApiKey.isEmpty() && !body.isEmpty())
+      lastFmApiKey = jsonStringField(body, "lastFmApiKey");
+    if (!lastFmApiKey.isEmpty() ||
+        (!body.isEmpty() && body.indexOf("\"lastFmApiKey\"") >= 0))
+      radio_.setLastFmApiKey(lastFmApiKey);
     WeatherConfig weather = radio_.weatherConfig();
     String weatherEnabled = argument("weatherEnabled");
     if (weatherEnabled.isEmpty() && !body.isEmpty())
