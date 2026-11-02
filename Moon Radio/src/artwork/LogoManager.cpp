@@ -9,9 +9,21 @@
 #include <cstring>
 #include <math.h>
 #include <new>
+#include <Preferences.h>
 
 #include "options.h"
 #include "MemoryArtwork.h"
+
+// Last.fm is enabled at runtime when the user supplies an API key in the web UI.
+#define USE_LASTFM_COVER
+
+static String configuredLastFmApiKey() {
+  Preferences preferences;
+  if (!preferences.begin("lvgl-radio", true)) return String();
+  const String key = preferences.getString("lastfm_key", "");
+  preferences.end();
+  return key;
+}
 
 void* stbiHeapMalloc(size_t size) {
   void* memory =
@@ -1216,10 +1228,12 @@ bool findMusicBrainzReleaseGroupCovers(const String& artist,
 
 bool findLastFmReleaseCover(const String& artist, const String& title,
                             String& coverUrl) {
-#if defined(USE_LASTFM_COVER) && defined(LASTFM_API_KEY)
+#if defined(USE_LASTFM_COVER)
+  const String apiKey = configuredLastFmApiKey();
+  if (apiKey.isEmpty()) return false;
   String url =
       "http://ws.audioscrobbler.com/2.0/?method=track.getInfo&autocorrect=1&format=json&api_key=";
-  url += LASTFM_API_KEY;
+  url += apiKey;
   url += "&artist=";
   url += urlEncode(artist);
   url += "&track=";
@@ -1243,10 +1257,12 @@ bool findLastFmReleaseCover(const String& artist, const String& title,
 
 bool findLastFmCoverCandidates(const String& artist, const String& title,
                                std::vector<String>& coverUrls) {
-#if defined(USE_LASTFM_COVER) && defined(LASTFM_API_KEY)
+#if defined(USE_LASTFM_COVER)
+  const String apiKey = configuredLastFmApiKey();
+  if (apiKey.isEmpty()) return false;
   String url =
       "http://ws.audioscrobbler.com/2.0/?method=track.getInfo&autocorrect=1&format=json&api_key=";
-  url += LASTFM_API_KEY;
+  url += apiKey;
   url += "&artist=";
   url += urlEncode(artist);
   url += "&track=";
@@ -1686,7 +1702,7 @@ void LogoManager::deferAlbumCoverSearch(uint32_t durationMs) {
 }
 
 void LogoManager::setAlbumTitle(const String& combinedTitle) {
-#if defined(USE_LASTFM_COVER) && defined(LASTFM_API_KEY)
+#if defined(USE_LASTFM_COVER)
   if (!albumCoversEnabled_) {
     if (!albumKey_.isEmpty()) {
       const String previousAlbumKey = albumKey_;
