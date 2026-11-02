@@ -796,6 +796,21 @@ void RadioController::setAlbumCoversEnabled(bool enabled) {
   refreshDisplay(true);
 }
 
+String RadioController::lastFmApiKey() const {
+  Preferences preferences;
+  if (!preferences.begin("lvgl-radio", true)) return String();
+  const String key = preferences.getString("lastfm_key", "");
+  preferences.end();
+  return key;
+}
+
+void RadioController::setLastFmApiKey(const String& key) {
+  Preferences preferences;
+  if (!preferences.begin("lvgl-radio", false)) return;
+  preferences.putString("lastfm_key", key);
+  preferences.end();
+}
+
 WeatherConfig RadioController::weatherConfig() const {
   return weather_.config();
 }

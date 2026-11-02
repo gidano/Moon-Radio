@@ -92,6 +92,8 @@ class RadioController {
   void setDiagnosticsVisible(bool visible);
   bool albumCoversEnabled() const;
   void setAlbumCoversEnabled(bool enabled);
+  String lastFmApiKey() const;
+  void setLastFmApiKey(const String& key);
   WeatherConfig weatherConfig() const;
   WeatherSnapshot weatherSnapshot() const;
   bool setWeatherConfig(const WeatherConfig& config);
@@ -107,6 +109,8 @@ class RadioController {
   size_t bufferFilled();
   size_t bufferFree();
   size_t bufferSize();
+  bool copyDisplayFrameRow(uint16_t y, uint8_t* destination,
+                           size_t destinationBytes) const;
   bool playlistActive() const;
   int playlistIndex() const;
   size_t playlistCount() const;
