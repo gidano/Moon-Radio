@@ -370,11 +370,11 @@ void RadioWebServer::registerRoutes() {
     String requestedLastFmKey = argument("lastFmApiKey");
     if (requestedLastFmKey.isEmpty() && !body.isEmpty())
       requestedLastFmKey = jsonStringField(body, "lastFmApiKey");
+    // A missing Last.fm key only prevents album-cover activation.  Other
+    // settings in this combined request must still be allowed to save.
     if ((requestedAlbumCovers == "true" || requestedAlbumCovers == "1") &&
         requestedLastFmKey.isEmpty()) {
-      server_.send(400, kJson,
-                   "{\"ok\":false,\"error\":\"lastfm_api_key_required\"}");
-      return;
+      requestedAlbumCovers = "false";
     }
     String timezone = argument("timezone");
     if (timezone.isEmpty() && !body.isEmpty())
@@ -475,6 +475,7 @@ void RadioWebServer::registerRoutes() {
     String albumCovers = argument("albumCovers");
     if (albumCovers.isEmpty() && !body.isEmpty())
       albumCovers = jsonStringField(body, "albumCovers");
+    if (requestedAlbumCovers == "false") albumCovers = "false";
     if (!albumCovers.isEmpty()) {
       radio_.setAlbumCoversEnabled(albumCovers == "true" ||
                                    albumCovers == "1");
