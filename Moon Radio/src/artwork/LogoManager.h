@@ -126,7 +126,7 @@ class LogoManager {
   std::vector<uint32_t> embeddedSegments_;
   String albumTitle_;
   String albumKey_;
-  bool albumCoversEnabled_{true};
+  bool albumCoversEnabled_{false};
   bool albumConservativeDownload_{false};
   uint32_t albumRequestedAt_{0};
   uint32_t albumStatusLoggedAt_{0};
