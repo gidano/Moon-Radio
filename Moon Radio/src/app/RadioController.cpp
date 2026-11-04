@@ -236,7 +236,7 @@ bool RadioController::begin() {
   volumeGraphicVisible_ = preferences.getBool("ui_vol", true);
   bufferBarVisible_ = preferences.getBool("ui_buf", true);
   diagnosticsVisible_ = preferences.getBool("ui_diag", false);
-  albumCoversEnabled_ = preferences.getBool("cover_on", true);
+  albumCoversEnabled_ = preferences.getBool("cover_on", false);
   logoManager_.setAlbumCoversEnabled(albumCoversEnabled_);
   if (backgroundPath_.isEmpty()) {
     backgroundPath_ = "/backgrounds/music_background.sr565";

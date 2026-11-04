@@ -210,7 +210,7 @@ class RadioController {
   bool volumeGraphicVisible_{true};
   bool bufferBarVisible_{true};
   bool diagnosticsVisible_{false};
-  bool albumCoversEnabled_{true};
+  bool albumCoversEnabled_{false};
   WeatherService weather_;
   ClockTtsConfig clockTts_;
   String currentPlayUrl_;
