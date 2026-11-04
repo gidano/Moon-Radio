@@ -839,7 +839,7 @@
                 document.getElementById('volumeGraphicVisible').checked = display.volumeGraphic !== false;
                 document.getElementById('bufferBarVisible').checked = display.bufferBar !== false;
                 document.getElementById('diagnosticsVisible').checked = !!display.diagnostics;
-                document.getElementById('albumCoversEnabled').checked = display.albumCovers !== false;
+                document.getElementById('albumCoversEnabled').checked = display.albumCovers === true;
                 document.getElementById('lastFmApiKey').value = String(display.lastFmApiKey || '');
 
                 const weather = data.weather || {};
@@ -902,7 +902,7 @@
                 document.getElementById('lastFmApiKeyError').style.display = 'none';
                 if (payload.albumCovers === 'true' && !payload.lastFmApiKey) {
                     document.getElementById('lastFmApiKeyError').style.display = 'block';
-                    throw new Error('A borítókereséshez Last.fm API-kulcs szükséges.');
+                    payload.albumCovers = 'false';
                 }
                 const response = await fetch('/api/settings', {
                     method: 'POST',
