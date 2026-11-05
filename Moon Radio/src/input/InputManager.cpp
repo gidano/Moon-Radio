@@ -23,11 +23,14 @@ uint8_t readAB(uint8_t pinA, uint8_t pinB) {
   return (digitalRead(pinA) ? 2U : 0U) | (digitalRead(pinB) ? 1U : 0U);
 }
 
-void configureEncoderPin(uint8_t pin) {
+void configureEncoderPin(uint8_t pin, bool button = false) {
 #if defined(ENC_INTERNALPULLUP)
   pinMode(pin, INPUT_PULLUP);
 #else
-  pinMode(pin, INPUT);
+  // The encoder button is active-low and must not be left floating.  The
+  // rotation pins may use an external bias, but both encoder buttons need a
+  // stable idle HIGH level.
+  pinMode(pin, button ? INPUT_PULLUP : INPUT);
 #endif
 }
 
@@ -61,7 +64,7 @@ void InputManager::begin(const InputActions& actions) {
   stationEncoder_ = {ENC_BTNL, ENC_BTNR, ENC_BTNB};
   configureEncoderPin(stationEncoder_.pinA);
   configureEncoderPin(stationEncoder_.pinB);
-  configureEncoderPin(stationEncoder_.pinButton);
+  configureEncoderPin(stationEncoder_.pinButton, true);
   stationEncoder_.previousAB = readAB(stationEncoder_.pinA, stationEncoder_.pinB);
 #if defined(ENC_USE_INTERRUPT)
   stationEncoder_.interruptPreviousAB = stationEncoder_.previousAB;
@@ -82,7 +85,7 @@ void InputManager::begin(const InputActions& actions) {
   volumeEncoder_ = {ENC2_BTNL, ENC2_BTNR, ENC2_BTNB};
   configureEncoderPin(volumeEncoder_.pinA);
   configureEncoderPin(volumeEncoder_.pinB);
-  configureEncoderPin(volumeEncoder_.pinButton);
+  configureEncoderPin(volumeEncoder_.pinButton, true);
   volumeEncoder_.previousAB = readAB(volumeEncoder_.pinA, volumeEncoder_.pinB);
 #if defined(ENC2_USE_INTERRUPT)
   volumeEncoder_.interruptPreviousAB = volumeEncoder_.previousAB;
@@ -107,14 +110,14 @@ void InputManager::loop() {
                 actions_.stationNext, actions_.togglePlayback,
                 actions_.stationLongPress);
   updateEncoder(volumeEncoder_, actions_.volumeDown, actions_.volumeUp,
-                actions_.togglePlayback);
+                actions_.togglePlayback, actions_.stationLongPress);
 #elif defined(ENC_BTNL) && defined(ENC_BTNR) && defined(ENC_BTNB)
   updateEncoder(stationEncoder_, actions_.primaryEncoderLeft,
                 actions_.primaryEncoderRight, actions_.togglePlayback,
                 actions_.stationLongPress);
 #elif defined(ENC2_BTNL) && defined(ENC2_BTNR) && defined(ENC2_BTNB)
   updateEncoder(volumeEncoder_, actions_.volumeDown, actions_.volumeUp,
-                actions_.togglePlayback);
+                actions_.togglePlayback, actions_.stationLongPress);
 #endif
 }
 
