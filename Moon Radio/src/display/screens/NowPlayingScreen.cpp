@@ -33,6 +33,9 @@ constexpr lv_coord_t kBufferBarLeft = 158;
 constexpr lv_coord_t kBufferBarTop = 73;
 constexpr lv_coord_t kBufferBarWidth = 308;
 constexpr lv_coord_t kBufferBarHeight = 3;
+constexpr lv_coord_t kInfoDividerTop = 183;
+constexpr lv_coord_t kInfoDividerMargin = 6;
+constexpr lv_coord_t kInfoDividerHeight = 2;
 constexpr uint32_t kBufferBarUpdateMs = 1000;
 constexpr bool kMoonPhaseEnabled = true;
 constexpr int kMoonPhaseCount = 10;
@@ -492,6 +495,20 @@ void NowPlayingScreen::create(FontManager& fonts,
   lv_obj_set_style_text_font(infoLabel_, fonts.regular(), 0);
   lv_label_set_long_mode(infoLabel_, LV_LABEL_LONG_DOT);
   lv_label_set_text(infoLabel_, Language::text("Kapcsolódás..."));
+
+  // Thin full-width accent below the codec row.  Keep the small side margin
+  // in logical pixels so it remains consistent on every supported panel.
+  infoDivider_ = lv_obj_create(screen);
+  lv_obj_set_pos(infoDivider_, kInfoDividerMargin, kInfoDividerTop);
+  const lv_coord_t displayWidth = lv_obj_get_width(screen);
+  lv_obj_set_size(infoDivider_, displayWidth - 2 * kInfoDividerMargin,
+                  kInfoDividerHeight);
+  lv_obj_set_style_bg_color(infoDivider_, lv_color_hex(0x7DD3FC), 0);
+  lv_obj_set_style_bg_opa(infoDivider_, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(infoDivider_, 0, 0);
+  lv_obj_set_style_radius(infoDivider_, 0, 0);
+  lv_obj_set_style_pad_all(infoDivider_, 0, 0);
+  lv_obj_clear_flag(infoDivider_, LV_OBJ_FLAG_SCROLLABLE);
 
   dateLabel_ = lv_label_create(screen);
   lv_obj_set_pos(dateLabel_, 14, 188);                                  // dátum sor pozíció magasság

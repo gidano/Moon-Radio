@@ -128,6 +128,7 @@ class NowPlayingScreen {
   lv_obj_t* bufferBarFill_{nullptr};
   lv_obj_t* titleLabel_{nullptr};
   lv_obj_t* infoLabel_{nullptr};
+  lv_obj_t* infoDivider_{nullptr};
   lv_obj_t* dateLabel_{nullptr};
   lv_obj_t* namedayLabel_{nullptr};
   lv_obj_t* weatherLabel_{nullptr};
