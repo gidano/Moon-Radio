@@ -33,7 +33,13 @@ constexpr size_t m_frameSizeVORBIS = UINT16_MAX; // OGG length is normally 4080 
 constexpr size_t m_outbuffSize = 4608 * 2;
 constexpr size_t m_resamplesBuffSize = m_outbuffSize * 8; // SRmin: 6KHz -> SRmax: 48K
 
-constexpr size_t AUDIO_STACK_SIZE = 3500;
+// The decoder runs on core 0 and handles the stream callbacks, metadata
+// forwarding and the MP3/AAC decode path from the same task.  3500 words was
+// enough for simple streams, but it left too little headroom for the current
+// callback path and could overwrite the task's canary (reported later as an
+// IDLE0 stack-canary panic).  Keep this in words: xTaskCreateStatic... takes
+// StackType_t entries, not bytes.
+constexpr size_t AUDIO_STACK_SIZE = 5000;
 
 // static allocations for Audio task
 StaticTask_t __attribute__((unused)) xAudioTaskBuffer;
@@ -90,7 +96,15 @@ size_t AudioBuffer::getBufsize() {
 }
 
 size_t AudioBuffer::init() {
-    m_buffer.alloc(m_mainBuffSize + m_resBuffSize, "AudioBuffer");
+    // Moon Radio: nagyobb PSRAM bemeneti puffer.  A 640 KiB egy 1,4 Mbit/s-os
+    // FLAC streamből csak ~3,6 s; 1,5 MiB ~9 s, egy 128 kbit/s-os MP3-ból
+    // ~100 s tartalék.  Ha a PSRAM nem ad ekkora blokkot, kisebbel próbálja,
+    // végül az eredeti 640 KiB-tal.
+    static const uint8_t kBufferMultipliers[] = {24, 16, 10};
+    for (uint8_t multiplier : kBufferMultipliers) {
+        m_mainBuffSize = (size_t)UINT16_MAX * multiplier;
+        if (m_buffer.alloc(m_mainBuffSize + m_resBuffSize, "AudioBuffer")) break;
+    }
     m_log.set_name("\nAudiobuffer_Log");
     m_mutex = xSemaphoreCreateBinary();
     xSemaphoreGive(m_mutex);
@@ -4137,6 +4151,7 @@ void Audio::processWebStream() {
             if (chunkLen < 0) return;
             if (chunkLen == 0) m_f_allDataReceived = true;
             m_pwst.chunkSize = chunkLen;
+            m_diagChunkCount++;
             m_pwst.readedBytes = 0; // readedBytes is not a part of chunkSize
         }
         m_pwst.writeSpace = min(m_pwst.writeSpace, m_pwst.chunkSize);

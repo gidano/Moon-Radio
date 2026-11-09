@@ -187,6 +187,9 @@ class Audio {
     uint32_t         inBufferFilled();  // returns the number of stored bytes in the inputbuffer
     uint32_t         inBufferFree();    // returns the number of free bytes in the inputbuffer
     uint32_t         getInBufferSize(); // returns the size of the inputbuffer in bytes
+    uint32_t         getStreamBytesRead() const { return m_audioFilePosition; } // Moon Radio: bytes read since connect
+    uint32_t         getChunkCount() const { return m_diagChunkCount; } // Moon Radio: HTTP chunks since boot
+    uint32_t         socketAvailable() { return m_client ? m_client->available() : 0; } // Moon Radio: bytes waiting in the socket
     void             inBufferStatus() { InBuff.showStatus(); }
     void             setTone(float gainLowPass, float gainBandPass, float gainHighPass);
     void             setI2SCommFMT_LSB(bool commFMT);
@@ -434,6 +437,7 @@ class Audio {
     uint32_t       m_avr_bitrate = 0;               // average bitrate, median calculated by VBR
     uint32_t       m_nominal_bitrate = 0;           // given br from header
     uint32_t       m_audioFilePosition = 0;         // current position, counts every readed byte
+    uint32_t       m_diagChunkCount = 0;            // Moon Radio diag: number of HTTP chunks parsed
     uint32_t       m_audioDataReadPtr = 0;          // used in playAudioData
     uint32_t       m_audioFileSize = 0;             // local and web files
     int            m_readbytes = 0;                 // bytes read
