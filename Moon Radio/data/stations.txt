@@ -5,7 +5,6 @@
 181.FM CLASSIC HITS	https://listen.181fm.com/181-greatoldies_128k.mp3	181
 181.FM GOOD TIME OLDIES	https://listen.181fm.com/181-goodtime_128k.mp3	181
 AFC RADIO	https://stream.afc.fm/index.html	afc
-AIDA RADIO	https://cdn05.radio.cloud:8128/AIDA-OMNIA-GAI	aidaradio
 BDPST ROCK	https://bdpstrock.hu/live.mp3	bdpstrock
 BDPST ROCK (HI-FI)	http://s2.audiostream.hu:8091/bdpstrock_FLAC	bdpstrock
 BEST OF ROCK.FM ACDC	http://bestofrockfm.stream.vip/acdc/mp3-256/bestofrock.fm/	bestofrockfm
