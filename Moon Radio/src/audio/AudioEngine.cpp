@@ -3,7 +3,9 @@
 
 #include <HTTPClient.h>
 #include <LittleFS.h>
+#include <WiFi.h>
 #include <WiFiClient.h>
+#include <esp_heap_caps.h>
 
 #include "options.h"
 
@@ -251,12 +253,13 @@ bool AudioEngine::begin(uint8_t volume) {
   // ennek ellenére minden egyes PCM mintán három lebegőpontos biquadot
   // számolna, ezért sík hangszínnél teljesen kihagyjuk.
   audio_.settings.IIR_FILTER = false;
-  // Nagyobb I2S DMA tartalék: 32 helyett 48 x 256 frame = ~279 ms (44,1 kHz)
-  // a korábbi ~186 ms helyett, +16 KiB belső DMA RAM árán (ennyi az LVGL
-  // PSRAM-ba költözésével bőven felszabadult).  A flash-írások (cache tiltás)
-  // és a nehéz HE-AAC/SBR dekódolás pillanatnyi elakadásait ez hidalja át,
-  // mielőtt a hang akadna.  setPinout() előtt kell beállítani.
-  audio_.settings.DMA_DESC_NUM = 48;
+  // I2S DMA: 32 x 256 frame = ~186 ms (44,1 kHz).  A korábbi 48 a belső
+  // (DMA-képes) RAM-ból 16 KiB-ot vett el, pedig ugyanez a RAM kell a Wi-Fi
+  // vételi puffereinek is: TLS-es borítókeresés közben 9 KiB-ra esett a
+  // belső heap, a Wi-Fi csomagokat dobott, és a stream elakadt.  A hálózati
+  // ingadozást úgyis a nagy PSRAM-os bemeneti puffer hidalja át.
+  // setPinout() előtt kell beállítani.
+  audio_.settings.DMA_DESC_NUM = 32;
   // Kis induló tartalék: a puffert innentől a külön stream-olvasó task
   // folyamatosan tölti, így nem kell másodpercekig némán várni a 200 KiB-os
   // előtöltésre.  Ha a szerver nem küld kezdő löketet, legfeljebb 1,5 mp
@@ -325,6 +328,58 @@ void AudioEngine::loop() {
     stateCode_ = "STOP";
   }
   if (!audio_.isRunning() && outputEnabled_) setOutputEnabled(false);
+
+  // Diagnosztika: 5 mp-enként a puffer és a belső RAM állapota, hogy egy
+  // akadás oka (hálózat vagy belső RAM-hiány) a soros naplóból látsszon.
+  // be = a hálózatról beolvasott adat az elmúlt időszakban (kbit/s): ha egy
+  // pufferzuhanásnál 0 körüli, a kapcsolat állt meg; ha a stream bitrátája
+  // alatt csordogál, a vétel lassú.
+  static uint32_t lastDiagAt = 0;
+  static uint32_t lastDiagBytes = 0;
+  static uint32_t lastDiagChunks = 0;
+  const uint32_t now = millis();
+  if (audio_.isRunning() && !localFilePlayback_ && now - lastDiagAt >= 5000) {
+    const uint32_t elapsed = now - lastDiagAt;
+    const uint32_t bytesRead = audio_.getStreamBytesRead();
+    const uint32_t delta =
+        bytesRead >= lastDiagBytes ? bytesRead - lastDiagBytes : bytesRead;
+    lastDiagAt = now;
+    lastDiagBytes = bytesRead;
+    const size_t total = audio_.getInBufferSize();
+    const size_t filled = audio_.inBufferFilled();
+    // var = a socketben váró bájtok (átlag/max) az olvasás után: ha nagy,
+    // a rádió olvas lassan; ha 0 körüli, a hálózat/TCP hoz keveset.
+    // chunk = átlagos HTTP-chunk méret, kor = Audio::loop hívás/s.
+    const uint32_t chunks = audio_.getChunkCount();
+    const uint32_t chunkDelta = chunks - lastDiagChunks;
+    lastDiagChunks = chunks;
+    const uint32_t loops = diagLoops_;
+    const uint32_t availMax = diagAvailMax_;
+    const uint32_t availSamples = diagAvailSamples_;
+    const uint32_t availAvg = availSamples ? diagAvailSum_ / availSamples : 0;
+    diagLoops_ = 0;
+    diagAvailMax_ = 0;
+    diagAvailSum_ = 0;
+    diagAvailSamples_ = 0;
+    Serial.printf("[diag] var=%u/%u B chunk=%u B (%u db) kor=%u/s\n",
+                  static_cast<unsigned>(availAvg),
+                  static_cast<unsigned>(availMax),
+                  static_cast<unsigned>(chunkDelta ? delta / chunkDelta : 0),
+                  static_cast<unsigned>(chunkDelta),
+                  static_cast<unsigned>(elapsed ? loops * 1000U / elapsed : 0));
+    Serial.printf(
+        "[diag] puffer=%u KB (%u%%) be=%u kbit/s belso heap=%u min=%u blokk=%u rssi=%d\n",
+        static_cast<unsigned>(filled / 1024),
+        static_cast<unsigned>(total ? filled * 100U / total : 0),
+        static_cast<unsigned>(elapsed ? (uint64_t)delta * 8U / elapsed : 0),
+        static_cast<unsigned>(
+            heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+        static_cast<unsigned>(heap_caps_get_minimum_free_size(
+            MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+        static_cast<unsigned>(heap_caps_get_largest_free_block(
+            MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
+        static_cast<int>(WiFi.RSSI()));
+  }
 }
 
 bool AudioEngine::connect(const String& url) {
@@ -602,16 +657,35 @@ void AudioEngine::streamTask() {
     // Rövid várakozás: ha a fő loop éppen kapcsolódik/leállít, a következő
     // körben újrapróbáljuk, a puffer addig is a dekóder rendelkezésére áll.
     if (!localFilePlayback_ && lockAudio(pdMS_TO_TICKS(20))) {
-      if (!localFilePlayback_) audio_.loop();
+      // Chunked HTTP-nél egy Audio::loop() legfeljebb egy chunkot olvas be,
+      // így apró chunkok mellett a hívások száma szabja meg a vételi
+      // sebességet: 10 ms-os ütemnél ~1,4 KB-os chunkokkal ez csak ~1,1 Mbit/s,
+      // épp a FLAC bitrátája, így a puffer nem tud nőni.  Ezért amíg a
+      // socketben adat vár és a pufferben van hely, egy körben többször is
+      // olvasunk (legfeljebb ~3 ms-ig), mielőtt elengedjük a CPU-t.
+      const uint32_t burstStarted = millis();
+      for (uint8_t i = 0; i < 16 && !localFilePlayback_; ++i) {
+        audio_.loop();
+        ++diagLoops_;
+        const uint32_t avail = audio_.socketAvailable();
+        if (i == 0) {
+          if (avail > diagAvailMax_) diagAvailMax_ = avail;
+          diagAvailSum_ += avail;
+          ++diagAvailSamples_;
+        }
+        if (avail == 0 || millis() - burstStarted >= 3) break;
+        const size_t bufTotal = audio_.getInBufferSize();
+        if (!bufTotal || audio_.inBufferFilled() + UINT16_MAX >= bufTotal) break;
+      }
       unlockAudio();
     }
     // Amíg kevés a tartalék, minden ms-ban olvasunk.  Utána ritkábban: a
     // korlátlan sebességű feltöltés (akár MB/s) a 0. magon futó Wi-Fi/lwIP
     // feladatokat terheli, és elveszi a CPU-t a dekódertől, ami a nehéz
     // HE-AAC-nál induláskori döcögést okoz, amíg a puffer meg nem telik.
-    // Egy olvasás legfeljebb a TCP-ablaknyi (5760 byte), így 10 ms-onként
-    // ~560 KiB/s, 25 ms-onként ~225 KiB/s jöhet: a 1,5 Mbit/s-os FLAC-nál is
-    // bőven gyorsabb a lejátszásnál, a puffer tehát tele marad.
+    // A fenti többszörös olvasás miatt egy körben a socketben váró teljes
+    // adat (legfeljebb a 32 KiB-os TCP-ablak) kiürül, chunked streamnél is,
+    // így a vétel felső korlátja a TCP-ablak / RTT, nem ez az ütemezés.
     const size_t total = audio_.getInBufferSize();
     const size_t filled = audio_.inBufferFilled();
     TickType_t delayTicks = 1;

@@ -106,6 +106,11 @@ class AudioEngine {
   volatile bool commandQueued_{false};
   volatile bool connectAttempted_{false};
   volatile bool tcpConnected_{false};
+  // Diagnosztika a stream taskból (a fő loop olvassa ki 5 mp-enként).
+  volatile uint32_t diagLoops_{0};
+  volatile uint32_t diagAvailMax_{0};
+  volatile uint32_t diagAvailSum_{0};
+  volatile uint32_t diagAvailSamples_{0};
   // Helyi fájl (TTS) lejátszásakor a flash-olvasás nem futhat a PSRAM-stackű
   // stream-taskban, ezért ilyenkor a fő loop hívja az Audio::loop()-ot.
   volatile bool localFilePlayback_{false};
