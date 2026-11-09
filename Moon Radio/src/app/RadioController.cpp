@@ -38,6 +38,7 @@ constexpr uint32_t kStreamRecoveryCooldownMs = 30000;
 // így nem marad belső memória nélkül a kézfogás alatt.  Ha a stream nem
 // indul el, legfeljebb a második értékig várunk.
 constexpr uint32_t kBackgroundAfterStreamReadyMs = 3000;
+constexpr uint32_t kBootLogoMinimumMs = 3000;
 constexpr uint32_t kBackgroundMaxHoldMs = 15000;
 // A dekóder saját "slow stream" jelzése után ennyi ideig nem indul új
 // borítóhálózat. Ez nem változtatja meg a borító indítási RAM- vagy
@@ -198,6 +199,7 @@ bool RadioController::begin() {
     Serial.println("[sd] SPI bus preparation failed; radio mode remains available");
   }
   display_.begin(actions);
+  bootLogoShownAt_ = millis();
   const InputActions inputActions{
       .context = this,
 #if defined(ENC2_BTNL) && defined(ENC2_BTNR) && defined(ENC2_BTNB)
@@ -274,9 +276,14 @@ bool RadioController::begin() {
   display_.setDiagnosticsVisible(diagnosticsVisible_);
   preferences.end();
 
+  if (currentIndex_ >= stationStore_.count()) currentIndex_ = 0;
   audio_.begin(volume_);
   weather_.begin(weatherConfig);
+  // A bootlogó kb. 3 mp-ig látszik: a Wi-Fi-kapcsolódás alatt is lejár, és
+  // a rádióképernyő átveszi a helyét.
+  wifiManager_.setWaitHook(startupWaitHook, this);
   wifiManager_.begin();
+  wifiManager_.setWaitHook(nullptr, nullptr);
   wifiWasConnected_ = wifiManager_.connected();
   applyTimezone();
 
@@ -291,11 +298,31 @@ bool RadioController::begin() {
     // bootlogót nem kell mesterségesen kitartani.
     connectCurrentStation();
   }
+  // Ha minden gyorsabban elkészült, a bootlogó a 3 mp végéig marad (a
+  // lejátszás közben már indul).
+  while (display_.bootLogoVisible() &&
+         millis() - bootLogoShownAt_ < kBootLogoMinimumMs) {
+    display_.loop();
+    delay(10);
+  }
   display_.finishStartupBootLogo();
   refreshDisplay(true);
   display_.loop();
   initialized_ = true;
   return true;
+}
+
+void RadioController::startupWaitHook(void* context) {
+  static_cast<RadioController*>(context)->serviceStartupBootLogo();
+}
+
+void RadioController::serviceStartupBootLogo() {
+  if (display_.bootLogoVisible() &&
+      millis() - bootLogoShownAt_ >= kBootLogoMinimumMs) {
+    display_.finishStartupBootLogo();
+    refreshDisplay(true);
+  }
+  display_.loop();
 }
 
 void RadioController::loop() {

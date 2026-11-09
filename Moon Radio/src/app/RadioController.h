@@ -132,6 +132,8 @@ class RadioController {
   static String stationUrlAction(void* context, size_t index);
   static size_t currentStationAction(void* context);
   static bool selectStationAction(void* context, size_t index);
+  static void startupWaitHook(void* context);
+  void serviceStartupBootLogo();
   static void prepareSelectorAction(void* context);
   static bool sdModeAction(void* context);
   static bool dlnaModeAction(void* context);
@@ -224,6 +226,7 @@ class RadioController {
   bool fsMaintenanceBusyLogged_{false};
   bool wifiWasConnected_{false};
   bool initialized_{false};
+  uint32_t bootLogoShownAt_{0};
   bool connectRetryPending_{false};
   bool backgroundUploadMode_{false};
   bool backgroundUploadResumePlayback_{false};
