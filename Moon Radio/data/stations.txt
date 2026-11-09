@@ -4,8 +4,8 @@
 181.FM - UK TOP 40	http://listen.181fm.com/181-uktop40_128k.mp3	181
 181.FM CLASSIC HITS	https://listen.181fm.com/181-greatoldies_128k.mp3	181
 181.FM GOOD TIME OLDIES	https://listen.181fm.com/181-goodtime_128k.mp3	181
-AIDA RADIO	https://cdn05.radio.cloud:8128/AIDA-OMNIA-GAI	aidaradio
 AFC RADIO	https://stream.afc.fm/index.html	afc
+AIDA RADIO	https://cdn05.radio.cloud:8128/AIDA-OMNIA-GAI	aidaradio
 BDPST ROCK	https://bdpstrock.hu/live.mp3	bdpstrock
 BDPST ROCK (HI-FI)	http://s2.audiostream.hu:8091/bdpstrock_FLAC	bdpstrock
 BEST OF ROCK.FM ACDC	http://bestofrockfm.stream.vip/acdc/mp3-256/bestofrock.fm/	bestofrockfm
@@ -18,6 +18,7 @@ COOL FM	https://mediagw.e-tiger.net:443/stream/cfmhq	coolfm
 COOLFM FUNKY&SOUL	https://mediagw.e-tiger.net/stream/zc25	coolfm
 CREEDENCE C. R.	https://nl4.mystreaming.net/er/creedence/icecast.audio	exclusiveradio
 CSUKÁS MESERÁDIÓ	https://mr-stream.connectmedia.hu/4611/mr10.mp3	csukasmeseradio
+DAFT PUNK	https://streaming.exclusive.radio/er/daftpunk/icecast.audio	exclusiveradio
 DANCEFM 89.5	http://edge126.rdsnet.ro:84/profm/dancefm.mp3	dancefm
 DANUBIUS RÁDIÓ	https://stream.danubiusradio.hu/danubius_192k	danubius
 DANUBIUS RÁDIÓ (HI-FI)	https://danubiusradio.hu/live_HiFi.mp3	danubius
@@ -34,6 +35,7 @@ GUNS 'N ROSES	http://stream.regenbogen2.de/gunsnroses/mp3-128/radiobrowser	rock_
 I LOVE PÉCS	https://stream.ilovepecsradio.hu/ilp.mp3	ilovepecs
 IRISH FOLK	https://stream.laut.fm/irish-folk	irish-folk
 IRISH PUB	https://solid24.streamupsolutions.com/proxy/vbkiacud?mp=/live	irishpubradio
+KLASSIKRADIO - BACH	http://stream.klassikradio.de/purebach/mp3-192/www.klassikradio.de/	/logos/rb-306e9bec-a532-11e8-abb8-52543be04c81.png
 KLUBRÁDIÓ	https://stream.klubradio.hu:8443/bpstream	klubradio
 KOSSUTH RÁDIÓ	http://icast.connectmedia.hu/4726/mr1ex.mp3	kossuth
 LA GROSSE RADIO REGGAE	http://hd.lagrosseradio.info/lagrosseradio-reggae-192.mp3	lagrosse
@@ -43,10 +45,10 @@ LUXFUNK	https://luxfunkbroadcast.com:443/proxy/luxfunkradio/stream	luxfunk
 MANGORADIO - LAUT.FM	https://mangoradio.stream.laut.fm/mangoradio	mangoradio
 MEGADANCE	http://gamershouse.hu:8000/livemega.mp3	megadance
 NEXT FM	http://stream.nextfm.hu/radio/8000/nextfmhu.mp3	nextfm
+ONLINERADIO VIVALDI	https://stream.0nlineradio.com/vivaldi?ref=radiobrowser	/logos/rb-0c7c0c0c-5981-440f-bc8a-98530962c191.png
 OXYGEN MAGYAR ZENE	https://oxygenmusic.hu:8443/oxygenmagyarzene	oxygen_music
 OXYGEN MUSIC	https://oxygenmusic.hu:8443/oxygenmusic_192	oxygen_music
-PARKFM	http://s03.diazol.hu:7142/stream.mp3	parkfm
-PC/ZENE - KEVERT	http://192.168.31.101:8000/playlist_shuffle.m3u	music_server
+PARK FM	http://s03.diazol.hu:7142/stream.mp3	parkfm
 PETŐFI RÁDIÓ	http://icast.connectmedia.hu/4738/mr2.mp3	petofi
 PINK FLOYD	https://streaming.exclusive.radio/er/pinkfloyd/icecast.audio	exclusiveradio
 POPTARISZNYA	http://adas.poptarisznya.hu:8200/live.mp3/	poptarisznya
@@ -65,18 +67,20 @@ REGGAE141.COM	http://das-edge27-sa23-lax02.cdnstream.com:80/1301_128	reggae141
 RETRO RÁDIÓ	http://icast.connectmedia.hu/5002/live.mp3	retro_radio
 RMF FM	http://195.150.20.242:8000/rmf_fm	rmf_fm
 ROCK FM	https://icast.connectmedia.hu/5301/live.mp3	rock_fm
-ROLLING STONES	http://stream.regenbogen2.de/rollingstones/mp3-128	rock_fm_de
 ROXY RÁDIÓ	https://s2.audiostream.hu/roxy_192k	roxy_radio
 RÁDIÓ 1	http://icast.connectmedia.hu/5201/live.mp3	radio1
 RÁDIÓ F.R.S.H. SIÓFOK	http://radiofrsh.com:8000/stream	radiofrsh
 SLÁGER FM	http://92.61.114.159:7812/slagerfm256.mp3	slager_fm
 SOMA FM REGGAE	https://ice2.somafm.com/reggae-128-mp3	soma_fm
 SUPERDJ	https://stream.diazol.hu:35150/stream	superdj
+TALKING HEADS	https://nl4.mystreaming.net/er/talkingheads/icecast.audio	exclusiveradio
 TAYLOR SWIFT	https://nl4.mystreaming.net/er/taylorswift/icecast.audio	exclusiveradio
 TECHNOLOVERS.FM - TECHNO	https://stream.technolovers.fm/techno	technolovers
 TESZT LAZA RADIO (VOR)	http://stream.lazaradio.com:8100/live.ogg	lazaradio
 TESZT LIBLWIP CSERE	https://s2.euer.tv/audio320	nologo
 TESZT TILOS (OPUS)	https://stream.tilos.hu/tilos.opus	tilos_radio
+THE EAGLES	https://streaming.exclusive.radio/er/eagles/icecast.audio	exclusiveradio
+THE ROLLING STONES	http://stream.regenbogen2.de/rollingstones/mp3-128	rock_fm_de
 TILOS	http://stream.tilos.hu/tilos_128.mp3	tilos_radio
 WDWH-ROOTS OF ROCK	http://s4.voscast.com:8950/stream	voscast
 YOUVENTUS RÁDIÓ	http://s2.audiostream.hu/juventus_192k	youventus
