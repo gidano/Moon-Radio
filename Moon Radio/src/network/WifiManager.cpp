@@ -46,7 +46,13 @@ bool WifiManager::findAccessPoint(const String& ssid,
                                   std::array<uint8_t, 6>& bssid,
                                   int32_t& channel) {
   channel = 0;
-  const int networkCount = WiFi.scanNetworks(false, true, false, 200, 0U);
+  // Aszinkron szkennelés: a ~2,6 s alatt a kijelző is kiszolgálható.
+  int networkCount = WiFi.scanNetworks(true, true, false, 200, 0U);
+  const uint32_t scanStarted = millis();
+  while (networkCount == WIFI_SCAN_RUNNING && millis() - scanStarted < 6000) {
+    waitStep(20);
+    networkCount = WiFi.scanComplete();
+  }
   if (networkCount <= 0) {
     WiFi.scanDelete();
     return false;
@@ -136,7 +142,7 @@ bool WifiManager::tryConnect(const Credential& credential,
       Serial.printf("[wifi] IP: %s\n", WiFi.localIP().toString().c_str());
       return true;
     }
-    delay(100);
+    waitStep(100);
   }
   safeStaDisconnect();
   if (keepAccessPoint) {
@@ -147,6 +153,11 @@ bool WifiManager::tryConnect(const Credential& credential,
     accessPointMode_ = true;
   }
   return false;
+}
+
+void WifiManager::waitStep(uint32_t ms) {
+  if (waitHook_) waitHook_(waitContext_);
+  delay(ms);
 }
 
 void WifiManager::startAccessPoint() {
