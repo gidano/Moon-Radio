@@ -26,6 +26,7 @@ class DisplayManager {
   // The bootlogo remains above the completed radio UI while the first stream
   // builds its startup reserve.  Removing it never changes the panel path.
   void finishStartupBootLogo();
+  bool bootLogoVisible() const { return bootLogoOverlay_ != nullptr; }
   void loop();
   void update(const AudioSnapshot& audio, const String& logoName,
               const String& wifiText, const String& ipText,
