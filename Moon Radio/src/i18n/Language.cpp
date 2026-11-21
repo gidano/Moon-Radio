@@ -14,7 +14,7 @@ const char* const codes[] = {"hu", "en", "de", "pl"};
 const char* const messages[][4] = {
   {"HANGERŐ", "VOLUME", "LAUTSTÄRKE", "GŁOŚNOŚĆ"},
   {"KEDV", "FAV", "FAVOR", "ULUB"},
-  {"MAGYAR", "HUNGARY", "UNGARN", "WĘGRY"},
+  {"HAZAI", "DOMESTIC", "INLÄNDISCH", "KRAJOWE"},
   {"VEGYES", "MIXED", "GEMISCHT", "RÓŻNE"},
   {"SD olvasási hiba", "SD read error", "SD-Lesefehler", "Błąd odczytu SD"},
   {"KESZ", "RDY", "BEREIT", "GOT"},
