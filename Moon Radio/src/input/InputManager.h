@@ -1,6 +1,9 @@
 #pragma once
 
 #include <Arduino.h>
+#include "options.h"
+
+class Rotary;
 
 struct InputActions {
   void* context{nullptr};
@@ -24,15 +27,13 @@ class InputManager {
     uint8_t pinA;
     uint8_t pinB;
     uint8_t pinButton;
-    uint8_t previousAB{0};
-    int8_t accumulator{0};
     bool rawButton{true};
     bool stableButton{true};
     bool longPressFired{false};
     uint32_t buttonChangedAt{0};
-    volatile uint8_t interruptPreviousAB{0};
     volatile int16_t interruptAccumulator{0};
     bool interruptDriven{false};
+    Rotary* rotary{nullptr};
   };
 
   static void IRAM_ATTR encoderInterrupt(void* argument);
