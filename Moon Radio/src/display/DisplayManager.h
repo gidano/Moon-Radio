@@ -58,6 +58,12 @@ class DisplayManager {
   void showMaintenance();
   void showWifiSetup(const String& address);
   void showPresets();
+  uint8_t presetBank() const;
+  String presetBankLabel(uint8_t bank) const;
+  const RadioPreset* presetSlot(uint8_t slot) const;
+  bool selectPresetBank(uint8_t bank);
+  bool savePresetSlot(uint8_t slot, const String& name, const String& url);
+  bool clearPresetSlot(uint8_t slot);
   void languageChanged();
   bool visualizerActive() const;
   void setBrightness(uint8_t value);

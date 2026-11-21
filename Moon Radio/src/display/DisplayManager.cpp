@@ -1547,6 +1547,40 @@ void DisplayManager::showPresets() {
   lv_obj_move_foreground(presetOverlay_);
 }
 
+uint8_t DisplayManager::presetBank() const { return presets_.bank(); }
+
+String DisplayManager::presetBankLabel(uint8_t bank) const {
+  return presets_.bankLabel(bank);
+}
+
+const RadioPreset* DisplayManager::presetSlot(uint8_t slot) const {
+  return presets_.slot(slot);
+}
+
+bool DisplayManager::selectPresetBank(uint8_t bank) {
+  if (!presets_.selectBank(bank)) return false;
+  presetDeleteArmed_ = -1;
+  presetDeleteArmedAt_ = 0;
+  if (presetActive_) {
+    refreshPresetBanks();
+    refreshPresetSlots();
+  }
+  return true;
+}
+
+bool DisplayManager::savePresetSlot(uint8_t slot, const String& name,
+                                    const String& url) {
+  const bool ok = presets_.saveSlot(slot, name, url);
+  if (ok && presetActive_) refreshPresetSlots();
+  return ok;
+}
+
+bool DisplayManager::clearPresetSlot(uint8_t slot) {
+  const bool ok = presets_.clearSlot(slot);
+  if (ok && presetActive_) refreshPresetSlots();
+  return ok;
+}
+
 void DisplayManager::hidePresets() {
   if (presetOverlay_) lv_obj_delete(presetOverlay_);
   resetPresets();
