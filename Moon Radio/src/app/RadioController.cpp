@@ -555,6 +555,39 @@ bool RadioController::selectStation(size_t index) {
   return ok;
 }
 
+uint8_t RadioController::presetBank() const { return display_.presetBank(); }
+
+String RadioController::presetBankLabel(uint8_t bank) const {
+  return display_.presetBankLabel(bank);
+}
+
+const RadioPreset* RadioController::presetSlot(uint8_t slot) const {
+  return display_.presetSlot(slot);
+}
+
+bool RadioController::selectPresetBank(uint8_t bank) {
+  return display_.selectPresetBank(bank);
+}
+
+bool RadioController::saveCurrentStationPreset(uint8_t slot) {
+  const Station* station = currentStation();
+  return station && display_.savePresetSlot(slot, station->name, station->url);
+}
+
+bool RadioController::clearPreset(uint8_t slot) {
+  return display_.clearPresetSlot(slot);
+}
+
+bool RadioController::playPreset(uint8_t slot) {
+  const RadioPreset* preset = display_.presetSlot(slot);
+  if (!preset || preset->empty()) return false;
+  const auto& stations = stationStore_.stations();
+  for (size_t index = 0; index < stations.size(); ++index) {
+    if (stations[index].url == preset->url) return selectStation(index);
+  }
+  return false;
+}
+
 bool RadioController::previousStation() {
   if (sdMode_ || dlnaMode_) return stepTrack(-1);
   const size_t count = stationStore_.count();

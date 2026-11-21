@@ -49,6 +49,13 @@ class RadioController {
   const LogoManager& logos() const;
 
   bool selectStation(size_t index);
+  uint8_t presetBank() const;
+  String presetBankLabel(uint8_t bank) const;
+  const RadioPreset* presetSlot(uint8_t slot) const;
+  bool selectPresetBank(uint8_t bank);
+  bool saveCurrentStationPreset(uint8_t slot);
+  bool clearPreset(uint8_t slot);
+  bool playPreset(uint8_t slot);
   bool previousStation();
   bool nextStation();
   bool previousTrack();
