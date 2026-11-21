@@ -12,6 +12,10 @@
 AudioEngine* AudioEngine::instance_ = nullptr;
 
 namespace {
+#ifndef AUDIO_SERIAL_DIAGNOSTICS
+#define AUDIO_SERIAL_DIAGNOSTICS 0
+#endif
+
 
 constexpr uint8_t kDisplayVolumeMax = 21;
 constexpr uint8_t kMaleksmVolumeMax = 254;
@@ -264,8 +268,8 @@ bool AudioEngine::begin(uint8_t volume) {
   // folyamatosan tölti, így nem kell másodpercekig némán várni a 200 KiB-os
   // előtöltésre.  Ha a szerver nem küld kezdő löketet, legfeljebb 1,5 mp
   // után a minimális (két frame-es) tartalékkal is elindul.
-  audio_.settings.BUFFER_TRESHOLD_WEBSTREAM = 32U * 1024U;
-  audio_.settings.BUFFER_TRESHOLD_WEBSTREAM_TIMEOUT_MS = 1500U;
+  audio_.settings.BUFFER_TRESHOLD_WEBSTREAM = 128U * 1024U;
+  audio_.settings.BUFFER_TRESHOLD_WEBSTREAM_TIMEOUT_MS = 3500U;
 #ifdef I2S_MCLK
   if (!audio_.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT, I2S_MCLK)) {
 #else
@@ -329,6 +333,7 @@ void AudioEngine::loop() {
   }
   if (!audio_.isRunning() && outputEnabled_) setOutputEnabled(false);
 
+#if AUDIO_SERIAL_DIAGNOSTICS
   // Diagnosztika: 5 mp-enként a puffer és a belső RAM állapota, hogy egy
   // akadás oka (hálózat vagy belső RAM-hiány) a soros naplóból látsszon.
   // be = a hálózatról beolvasott adat az elmúlt időszakban (kbit/s): ha egy
@@ -380,6 +385,7 @@ void AudioEngine::loop() {
             MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
         static_cast<int>(WiFi.RSSI()));
   }
+#endif
 }
 
 bool AudioEngine::connect(const String& url) {
@@ -666,13 +672,18 @@ void AudioEngine::streamTask() {
       const uint32_t burstStarted = millis();
       for (uint8_t i = 0; i < 16 && !localFilePlayback_; ++i) {
         audio_.loop();
+#if AUDIO_SERIAL_DIAGNOSTICS
         ++diagLoops_;
+#endif
         const uint32_t avail = audio_.socketAvailable();
+#if AUDIO_SERIAL_DIAGNOSTICS
         if (i == 0) {
           if (avail > diagAvailMax_) diagAvailMax_ = avail;
           diagAvailSum_ += avail;
           ++diagAvailSamples_;
         }
+#endif
+
         if (avail == 0 || millis() - burstStarted >= 3) break;
         const size_t bufTotal = audio_.getInBufferSize();
         if (!bufTotal || audio_.inBufferFilled() + UINT16_MAX >= bufTotal) break;
