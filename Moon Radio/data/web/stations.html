@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1020">
+  <title>Moon Radio – Kedvencek</title>
+  <link rel="icon" href="/web/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/web/site.webmanifest">
+  <style>
+    :root { color-scheme:dark; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:#080b12; color:#f1f5f9; font-family:system-ui,sans-serif; }
+    .page { max-width:860px; margin:auto; padding:16px; }
+    h1 { margin:0; color:#22d3ee; font-size:28px; font-weight:500; text-align:center; }
+    .nav { margin:6px 0 14px; text-align:center; font-size:14px; }
+    a { color:#7dd3fc; }
+    .mode, .banks { display:grid; gap:7px; }
+    .mode { grid-template-columns:repeat(3,1fr); }
+    .banks { grid-template-columns:repeat(5,1fr); margin-top:14px; }
+    button { min-height:44px; border:1px solid #263246; border-radius:9px; background:#0f172a; color:#94a3b8; cursor:pointer; font:inherit; font-weight:650; }
+    button:hover:not(:disabled) { border-color:#22d3ee; color:#e0faff; }
+    button:disabled { cursor:not-allowed; opacity:.48; }
+    .mode button { min-height:48px; font-size:16px; }
+    .mode button.active { background:#22d3ee; border-color:#22d3ee; color:#071018; }
+    .mode button.delete.active { background:#ef4444; border-color:#ef4444; color:white; }
+    .status { min-height:26px; margin:10px 0 4px; color:#7dd3fc; font-size:15px; text-align:center; }
+    .status.error { color:#fca5a5; }
+    .hint { min-height:20px; color:#94a3b8; font-size:13px; text-align:center; }
+    .slots { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:14px; }
+    .slot { min-height:74px; padding:10px 14px; overflow:hidden; border-radius:12px; background:#10243a; color:#f1f5f9; font-size:17px; text-align:center; }
+    .slot.current { border:2px solid #22d3ee; background:#164e63; }
+    .slot.empty { background:#111827; color:#64748b; }
+    .slot.armed { border:2px solid #ef4444; background:#7f1d1d; color:#fff; }
+    .slot-number { color:#7dd3fc; }
+    .slot-name { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .banks button { min-height:43px; font-size:14px; }
+    .banks button.active { border:2px solid #22d3ee; background:#164e63; color:#67e8f9; }
+    .current { margin:14px 0 0; padding:10px 12px; border:1px solid #263246; border-radius:9px; background:#0f172a; color:#cbd5e1; font-size:13px; text-align:center; }
+    @media (max-width:480px) { .page { padding:10px; } .mode { gap:5px; } .mode button { font-size:14px; } .slots { gap:7px; } .slot { min-height:66px; padding:8px; font-size:14px; } .banks { gap:4px; } .banks button { font-size:12px; padding:4px; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <h1 id="heading">⭐ Kedvencek</h1>
+    <nav class="nav"><a id="back" href="/">← Vissza a lejátszóhoz</a></nav>
+    <div class="mode" role="tablist">
+      <button id="playMode" type="button" class="active"></button>
+      <button id="saveMode" type="button"></button>
+      <button id="deleteMode" type="button" class="delete"></button>
+    </div>
+    <div id="status" class="status" role="status"></div>
+    <div id="hint" class="hint"></div>
+    <section id="slots" class="slots" aria-live="polite"></section>
+    <section id="banks" class="banks" aria-label="Favourite banks"></section>
+    <div id="current" class="current"></div>
+  </main>
+  <script>
+    const words = {
+      hu: { title:'Kedvencek', back:'← Vissza a lejátszóhoz', play:'LEJÁTSZÁS', save:'MENTÉS', remove:'TÖRLÉS', select:'Válassz egy kedvenc állomást', playHint:'Kattints egy kedvencre a lejátszáshoz.', saveHint:'Válassz helyet az aktuálisan játszott állomásnak.', deleteHint:'A törléshez kattints kétszer ugyanarra a helyre.', empty:'Üres hely', current:'Aktuális állomás: ', noCurrent:'Nincs menthető rádióállomás.', saved:'Elmentve: ', deleted:'Törölve: ', selected:'Lejátszás indítva: ', slotEmpty:'Ez a presethely üres.', again:'Kattints újra a törléshez.', missing:'Az állomás már nincs a listában.', failed:'A művelet nem sikerült. Próbáld újra.' },
+      en: { title:'Favourites', back:'← Back to player', play:'PLAY', save:'SAVE', remove:'DELETE', select:'Select a favourite station', playHint:'Click a favourite to play it.', saveHint:'Choose a slot for the currently playing station.', deleteHint:'Click the same slot twice to delete it.', empty:'Empty slot', current:'Current station: ', noCurrent:'No radio station can be saved.', saved:'Saved: ', deleted:'Deleted: ', selected:'Playing: ', slotEmpty:'This favourite slot is empty.', again:'Click again to delete.', missing:'The station is no longer in the list.', failed:'The operation failed. Please try again.' },
+      de: { title:'Favoriten', back:'← Zurück zum Player', play:'ABSPIELEN', save:'SPEICHERN', remove:'LÖSCHEN', select:'Favoriten auswählen', playHint:'Favorit zum Abspielen anklicken.', saveHint:'Speicherplatz für den aktuellen Sender wählen.', deleteHint:'Zum Löschen denselben Platz zweimal anklicken.', empty:'Leerer Platz', current:'Aktueller Sender: ', noCurrent:'Kein Radiosender zum Speichern.', saved:'Gespeichert: ', deleted:'Gelöscht: ', selected:'Wiedergabe gestartet: ', slotEmpty:'Dieser Favoritenplatz ist leer.', again:'Zum Löschen erneut anklicken.', missing:'Der Sender ist nicht mehr in der Liste.', failed:'Die Aktion ist fehlgeschlagen. Bitte erneut versuchen.' },
+      pl: { title:'Ulubione', back:'← Wróć do odtwarzacza', play:'ODTWÓRZ', save:'ZAPISZ', remove:'USUŃ', select:'Wybierz ulubioną stację', playHint:'Kliknij ulubioną stację, aby ją odtworzyć.', saveHint:'Wybierz miejsce dla aktualnie odtwarzanej stacji.', deleteHint:'Aby usunąć, kliknij to samo miejsce dwa razy.', empty:'Puste miejsce', current:'Aktualna stacja: ', noCurrent:'Brak stacji radiowej do zapisania.', saved:'Zapisano: ', deleted:'Usunięto: ', selected:'Odtwarzanie: ', slotEmpty:'To miejsce ulubionych jest puste.', again:'Kliknij ponownie, aby usunąć.', missing:'Stacji nie ma już na liście.', failed:'Operacja nie powiodła się. Spróbuj ponownie.' }
+    };
+    let language = 'hu', mode = 'play', armedSlot = -1, data = { bank:0, banks:[], slots:[], canSave:false, currentStation:'', currentUrl:'' };
+    const $ = id => document.getElementById(id); const t = key => (words[language] || words.hu)[key];
+    const message = (value, error = false) => { $('status').textContent = value; $('status').classList.toggle('error', error); };
+    const post = async (path, values) => { const response = await fetch(path, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:new URLSearchParams(values)}); if (!response.ok) throw new Error('request failed'); };
+    function applyText() {
+      document.documentElement.lang = language; document.title = 'Moon Radio – ' + t('title'); $('heading').textContent = '⭐ ' + t('title'); $('back').textContent = t('back');
+      $('playMode').textContent = t('play'); $('saveMode').textContent = t('save'); $('deleteMode').textContent = t('remove'); render();
+    }
+    function modeHint() { return mode === 'play' ? t('playHint') : mode === 'save' ? t('saveHint') : t('deleteHint'); }
+    function render() {
+      $('hint').textContent = modeHint();
+      [['playMode','play'],['saveMode','save'],['deleteMode','delete']].forEach(([id, value]) => $(id).classList.toggle('active', value === mode));
+      const slots = $('slots'); slots.textContent = '';
+      for (let index = 0; index < 8; index++) {
+        const slot = data.slots[index] || {name:'',url:''}; const empty = !slot.name || !slot.url; const button = document.createElement('button');
+        button.type = 'button'; button.className = 'slot' + (empty ? ' empty' : '') + (!empty && slot.url === data.currentUrl ? ' current' : '') + (armedSlot === index ? ' armed' : '');
+        const number = document.createElement('span'); number.className = 'slot-number'; number.textContent = (index + 1) + '. ';
+        const name = document.createElement('span'); name.className = 'slot-name'; name.textContent = empty ? t('empty') : slot.name;
+        button.append(number, name); button.addEventListener('click', () => useSlot(index)); slots.append(button);
+      }
+      const banks = $('banks'); banks.textContent = '';
+      data.banks.forEach((label, index) => { const button = document.createElement('button'); button.type = 'button'; button.textContent = label; button.classList.toggle('active', index === data.bank); button.addEventListener('click', () => changeBank(index)); banks.append(button); });
+      $('current').textContent = data.canSave ? t('current') + data.currentStation : t('noCurrent');
+    }
+    async function load(silent = false) { try { const response = await fetch('/api/presets', {cache:'no-store'}); if (!response.ok) throw new Error('load failed'); data = await response.json(); armedSlot = -1; render(); if (!silent) message(t('select')); } catch (_) { message(t('failed'), true); } }
+    async function changeBank(bank) { try { await post('/api/presets/bank', {bank}); await load(true); message(data.banks[bank] || ''); } catch (_) { message(t('failed'), true); } }
+    async function useSlot(slotIndex) {
+      const slot = data.slots[slotIndex] || {name:'',url:''}; const empty = !slot.name || !slot.url;
+      try {
+        if (mode === 'play') { if (empty) return message(t('slotEmpty'), true); await post('/api/presets/play', {slot:slotIndex}); await load(true); return message(t('selected') + slot.name); }
+        if (mode === 'save') { if (!data.canSave) return message(t('noCurrent'), true); await post('/api/presets/save', {slot:slotIndex}); await load(true); return message(t('saved') + data.currentStation); }
+        if (empty) return message(t('slotEmpty'), true);
+        if (armedSlot !== slotIndex) { armedSlot = slotIndex; render(); return message(t('again'), true); }
+        await post('/api/presets/delete', {slot:slotIndex}); const name = slot.name; await load(true); message(t('deleted') + name);
+      } catch (_) { message(mode === 'play' ? t('missing') : t('failed'), true); }
+    }
+    function setMode(next) { mode = next; armedSlot = -1; render(); message(mode === 'play' ? t('select') : mode === 'save' ? t('saveHint') : t('deleteHint')); }
+    $('playMode').addEventListener('click', () => setMode('play')); $('saveMode').addEventListener('click', () => setMode('save')); $('deleteMode').addEventListener('click', () => setMode('delete'));
+    async function syncLanguage() { try { const response = await fetch('/api/language', {cache:'no-store'}); const current = response.ok && await response.json(); if (current && words[current.language] && current.language !== language) { language = current.language; applyText(); } } catch (_) {} }
+    applyText(); syncLanguage().then(() => load()); setInterval(syncLanguage, 5000);
+  </script>
+</body>
+</html>
