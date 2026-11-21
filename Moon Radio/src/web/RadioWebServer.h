@@ -19,6 +19,7 @@ class RadioWebServer {
   void serveHome();
   void serveWifiForm();
   void sendStations();
+  void sendPresets();
   void sendSdDirectory();
   void sendStatus();
   void sendBuffer();
@@ -41,6 +42,10 @@ class RadioWebServer {
   void updateStation();
   void deleteStation();
   void moveStation();
+  void selectPresetBank();
+  void savePreset();
+  void deletePreset();
+  void playPreset();
   void backgroundUploadFinished();
   void backgroundUploadChunk();
   void logoUploadFinished();

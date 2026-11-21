@@ -197,6 +197,8 @@ void RadioWebServer::registerRoutes() {
   });
   server_.on("/search", HTTP_GET,
              [this]() { serveFile(String("/web/search_") + radio_.uiLanguage() + ".html", "text/html; charset=utf-8"); });
+  server_.on("/stations", HTTP_GET,
+             [this]() { serveFile("/web/stations.html", "text/html; charset=utf-8"); });
   server_.on("/settings", HTTP_GET,
              [this]() { serveFile(String("/web/settings_") + radio_.uiLanguage() + ".html", "text/html; charset=utf-8"); });
   server_.on("/style.css", HTTP_GET,
@@ -221,6 +223,7 @@ void RadioWebServer::registerRoutes() {
   });
 
   server_.on("/api/stations", HTTP_GET, [this]() { sendStations(); });
+  server_.on("/api/presets", HTTP_GET, [this]() { sendPresets(); });
   server_.on("/api/sd/list", HTTP_GET, [this]() { sendSdDirectory(); });
   server_.on("/api/sd/play", HTTP_POST, [this]() {
     const bool ok = radio_.playSdFile(argument("path"));
@@ -287,6 +290,15 @@ void RadioWebServer::registerRoutes() {
              [this]() { moveStation(); });
   server_.on("/api/stations/move", HTTP_POST,
              [this]() { moveStation(); });
+
+  server_.on("/api/presets/bank", HTTP_POST,
+             [this]() { selectPresetBank(); });
+  server_.on("/api/presets/save", HTTP_POST,
+             [this]() { savePreset(); });
+  server_.on("/api/presets/delete", HTTP_POST,
+             [this]() { deletePreset(); });
+  server_.on("/api/presets/play", HTTP_POST,
+             [this]() { playPreset(); });
 
   server_.on("/api/station", HTTP_POST, [this]() {
     const int index = argument("index").toInt();
@@ -748,6 +760,30 @@ void RadioWebServer::sendStations() {
   json += ",\"title\":\"" + jsonEscape(audio.streamTitle) + "\"";
   json += ",\"artist\":\"\",\"codec\":\"" + jsonEscape(audio.codec) + "\"";
   json += ",\"bitrate\":" + String(audio.bitrateKbps) + "}";
+  server_.send(200, kJson, json);
+}
+
+void RadioWebServer::sendPresets() {
+  String json;
+  json.reserve(2048);
+  json = "{\"bank\":" + String(radio_.presetBank()) + ",\"banks\":[";
+  for (uint8_t bank = 0; bank < PresetStore::kBankCount; ++bank) {
+    if (bank) json += ',';
+    json += "\"" + jsonEscape(radio_.presetBankLabel(bank)) + "\"";
+  }
+  json += "],\"slots\":[";
+  for (uint8_t slot = 0; slot < PresetStore::kSlotCount; ++slot) {
+    if (slot) json += ',';
+    const RadioPreset* preset = radio_.presetSlot(slot);
+    json += "{\"name\":\"" + jsonEscape(preset ? preset->name : String()) +
+            "\",\"url\":\"" + jsonEscape(preset ? preset->url : String()) + "\"}";
+  }
+  const Station* current = radio_.currentStation();
+  json += "],\"canSave\":" + String(current ? "true" : "false");
+  json += ",\"currentStation\":\"" +
+          jsonEscape(current ? current->name : String()) + "\"";
+  json += ",\"currentUrl\":\"" +
+          jsonEscape(current ? current->url : String()) + "\"}";
   server_.send(200, kJson, json);
 }
 
@@ -1380,8 +1416,8 @@ void RadioWebServer::addStation() {
     station.logoName = normalizeLogo(jsonStringField(body, "logo"));
     station.homepage = jsonStringField(body, "homepage");
   }
-  server_.send(radio_.stations().add(station) ? 200 : 400, kJson,
-               "{\"ok\":true}");
+  const bool ok = radio_.stations().add(station);
+  server_.send(ok ? 200 : 400, kJson, ok ? "{\"ok\":true}" : "{\"ok\":false}");
 }
 
 void RadioWebServer::updateStation() {
@@ -1394,7 +1430,7 @@ void RadioWebServer::updateStation() {
   Station station = *old;
   if (!argument("name").isEmpty()) station.name = argument("name");
   if (!argument("url").isEmpty()) station.url = argument("url");
-  if (!argument("logo").isEmpty())
+  if (server_.hasArg("logo"))
     station.logoName = normalizeLogo(argument("logo"));
   if (server_.hasArg("homepage"))
     station.homepage = argument("homepage");
@@ -1404,8 +1440,8 @@ void RadioWebServer::updateStation() {
 
 void RadioWebServer::deleteStation() {
   const int index = argument("index").toInt();
-  server_.send(radio_.stations().remove(index) ? 200 : 400, kJson,
-               "{\"ok\":true}");
+  const bool ok = radio_.stations().remove(index);
+  server_.send(ok ? 200 : 400, kJson, ok ? "{\"ok\":true}" : "{\"ok\":false}");
 }
 
 void RadioWebServer::moveStation() {
@@ -1418,6 +1454,34 @@ void RadioWebServer::moveStation() {
   }
   server_.send(radio_.stations().move(from, to) ? 200 : 400, kJson,
                "{\"ok\":true}");
+}
+
+void RadioWebServer::selectPresetBank() {
+  const int bank = argument("bank").toInt();
+  const bool ok = bank >= 0 && bank < PresetStore::kBankCount &&
+                  radio_.selectPresetBank(static_cast<uint8_t>(bank));
+  server_.send(ok ? 200 : 400, kJson, ok ? "{\"ok\":true}" : "{\"ok\":false}");
+}
+
+void RadioWebServer::savePreset() {
+  const int slot = argument("slot").toInt();
+  const bool ok = slot >= 0 && slot < PresetStore::kSlotCount &&
+                  radio_.saveCurrentStationPreset(static_cast<uint8_t>(slot));
+  server_.send(ok ? 200 : 400, kJson, ok ? "{\"ok\":true}" : "{\"ok\":false}");
+}
+
+void RadioWebServer::deletePreset() {
+  const int slot = argument("slot").toInt();
+  const bool ok = slot >= 0 && slot < PresetStore::kSlotCount &&
+                  radio_.clearPreset(static_cast<uint8_t>(slot));
+  server_.send(ok ? 200 : 400, kJson, ok ? "{\"ok\":true}" : "{\"ok\":false}");
+}
+
+void RadioWebServer::playPreset() {
+  const int slot = argument("slot").toInt();
+  const bool ok = slot >= 0 && slot < PresetStore::kSlotCount &&
+                  radio_.playPreset(static_cast<uint8_t>(slot));
+  server_.send(ok ? 200 : 400, kJson, ok ? "{\"ok\":true}" : "{\"ok\":false}");
 }
 
 void RadioWebServer::backgroundUploadFinished() {
