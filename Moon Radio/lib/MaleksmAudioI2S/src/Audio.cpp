@@ -39,7 +39,7 @@ constexpr size_t m_resamplesBuffSize = m_outbuffSize * 8; // SRmin: 6KHz -> SRma
 // callback path and could overwrite the task's canary (reported later as an
 // IDLE0 stack-canary panic).  Keep this in words: xTaskCreateStatic... takes
 // StackType_t entries, not bytes.
-constexpr size_t AUDIO_STACK_SIZE = 5000;
+constexpr size_t AUDIO_STACK_SIZE = 8192;
 
 // static allocations for Audio task
 StaticTask_t __attribute__((unused)) xAudioTaskBuffer;
