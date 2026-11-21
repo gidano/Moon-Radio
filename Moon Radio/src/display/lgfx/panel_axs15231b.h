@@ -186,19 +186,25 @@ struct Panel_AXS15231B : public Panel_FrameBufferBase {
             return false;
         }
 
-#if AXS_USE_RAW_QIO_FLUSH && AXS_PREINIT_RAW_QIO_BUS && !AXS_USE_LOVYAN_FULL_FLUSH && !AXS_FACTORY_DIRECT_LVGL
+// ESP-LCD's factory path reuses the SPI3 bus too.  Reserve its complete
+// staging-block size before LovyanGFX attaches, otherwise its default 4 KiB
+// host limit rejects the factory transport's 8 KiB colour descriptors.
+#if AXS_USE_RAW_QIO_FLUSH && AXS_PREINIT_RAW_QIO_BUS && !AXS_USE_LOVYAN_FULL_FLUSH
         preinitRawQioBus();
 #endif
 
         if (!Panel_FrameBufferBase::init(use_reset)) {
-#if AXS_USE_RAW_QIO_FLUSH && AXS_PREINIT_RAW_QIO_BUS && !AXS_USE_LOVYAN_FULL_FLUSH && !AXS_FACTORY_DIRECT_LVGL
+#if AXS_USE_RAW_QIO_FLUSH && AXS_PREINIT_RAW_QIO_BUS && !AXS_USE_LOVYAN_FULL_FLUSH
             releaseRawQioBusPreinit();
 #endif
             return false;
         }
 
         
-#if AXS_USE_RAW_QIO_FLUSH && !AXS_USE_LOVYAN_FULL_FLUSH
+// Factory-direct mode owns pixel transfers through AxsFactoryTransport.
+// Do not add the legacy raw-QSPI device to that same bus: it is neither used
+// by the factory path nor compatible with the ESP-LCD transaction ownership.
+#if AXS_USE_RAW_QIO_FLUSH && !AXS_USE_LOVYAN_FULL_FLUSH && !AXS_FACTORY_DIRECT_LVGL
         initRawQioFlush();
 #endif
 
@@ -252,7 +258,7 @@ struct Panel_AXS15231B : public Panel_FrameBufferBase {
             vSemaphoreDelete(_frameMutex);
             _frameMutex = nullptr;
         }
-#if AXS_USE_RAW_QIO_FLUSH && !AXS_USE_LOVYAN_FULL_FLUSH
+#if AXS_USE_RAW_QIO_FLUSH && !AXS_USE_LOVYAN_FULL_FLUSH && !AXS_FACTORY_DIRECT_LVGL
         releaseRawQioFlush();
 #endif
         Panel_FrameBufferBase::releaseBus();
@@ -272,6 +278,15 @@ struct Panel_AXS15231B : public Panel_FrameBufferBase {
         (void)y;
         (void)w;
         (void)h;
+#if AXS_FACTORY_DIRECT_LVGL
+        // LVGL is flushed exclusively by AxsFactoryTransport.  During
+        // LovyanGFX setup it may request a retained-frame flush; sending it
+        // would mix the obsolete raw-QSPI protocol with the factory ESP-LCD
+        // protocol on SPI3 and corrupt the transport state.
+        clearDirtyRange();
+        _flushRequested = false;
+        return;
+#endif
 #if AXS_FLUSH_DIAG
         const uint32_t diagStartUs = micros();
 #endif
