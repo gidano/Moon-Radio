@@ -6,7 +6,7 @@ namespace {
 constexpr char kPresetDirectory[] = "/presets";
 constexpr char kLabelPath[] = "/presets/banks.txt";
 constexpr const char* kDefaultLabels[PresetStore::kBankCount] = {
-    "KEDV", "ROCK", "MAGYAR", "CHILL", "VEGYES"};
+    "KEDV", "ROCK", "HAZAI", "CHILL", "VEGYES"};
 
 }  // namespace
 
@@ -84,6 +84,10 @@ void PresetStore::loadLabels() {
     String label = file.readStringUntil('\n');
     label.replace("\r", "");
     label = cleanField(label);
+    // Earlier releases called the third bank "MAGYAR".  It is a general
+    // domestic/local bank, so migrate the old built-in label on load while
+    // keeping any other user-defined label intact.
+    if (index == 2 && label == "MAGYAR") label = "HAZAI";
     if (!label.isEmpty()) labels_[index] = label;
     ++index;
   }
