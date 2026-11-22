@@ -80,7 +80,7 @@ TESZT LAZA RADIO (VOR)	http://stream.lazaradio.com:8100/live.ogg	lazaradio
 TESZT LIBLWIP CSERE	https://s2.euer.tv/audio320	nologo
 TESZT TILOS (OPUS)	https://stream.tilos.hu/tilos.opus	tilos_radio
 THE EAGLES	https://streaming.exclusive.radio/er/eagles/icecast.audio	exclusiveradio
-THE ROLLING STONES	http://stream.regenbogen2.de/rollingstones/mp3-128	rock_fm_de
+THE ROLLING STONES	https://stream.regenbogen2.de/2000errock/mp3-128/stream.regenbogen2.de/	rock_fm_de
 TILOS	http://stream.tilos.hu/tilos_128.mp3	tilos_radio
 WDWH-ROOTS OF ROCK	http://s4.voscast.com:8950/stream	voscast
 YOUVENTUS RÁDIÓ	http://s2.audiostream.hu/juventus_192k	youventus
