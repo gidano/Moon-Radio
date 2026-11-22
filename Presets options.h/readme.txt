@@ -17,9 +17,8 @@ több kijelzőt nem tudtam konfigurálni mert nálam nincs egyéb más 480x320-a
 
 Amennyiben a rádiólogó helyén aktuálisan hallgatott zenék albumborítóját is szeretnéd látni,
 szükséged lesz egy - ingyenes regisztrációval elérhető - API-key nevű hosszabb karakterlistára.
-Az options.h fájlban látod ezt, itt kell megadnod majd újra flashelni a rádiót. Ehhez /data frissítés nem kell:
-
-#define LASTFM_API_KEY "saját API-key kell ide"    // itt regisztrálhatsz hozzá szabadon: https://www.last.fm/api/authentication
+Ezt a webes kezelőfelület - Beállítások - Vizualizáció menü alatt tudod megadni.
+A lap alján lévő mentés gombra kattintva a rádió menti; az ESP32 teljes törléséig többé nem kell megadnod!
 
 Egyéb haználati infókat a Readme-, és Functionality.md fájlok tartalmaznak!
 
@@ -46,9 +45,8 @@ I wasn’t able to configure more displays because I don’t have any other 480x
 
 If you’d like to see the album cover of the song currently playing in place of the radio logo,
 you’ll need a long string of characters called an API key—which is available after free registration.
-You’ll find this in the options.h file; you’ll need to enter it there and then reflash the radio. No /data update is required for this:
-
-#define LASTFM_API_KEY "enter your API key here"    // You can register for one for free here: https://www.last.fm/api/authentication
+You can configure this under the Web Interface > Settings > Visualization menu.
+Click the Save button at the bottom of the page to save your settings; you won't need to enter them again until you completely erase the ESP32!
 
 Additional usage information is included in the Readme and Functionality.md files!
 
